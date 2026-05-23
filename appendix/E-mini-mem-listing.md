@@ -67,3 +67,9 @@ npm run install-plugin # 链接到 Claude Code 插件目录
 5. **加向量搜索**：ChromaDB 或 pgvector
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
+
+---
+
+> 本附录来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

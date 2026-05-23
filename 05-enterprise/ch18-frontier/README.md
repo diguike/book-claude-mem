@@ -212,3 +212,9 @@ async function selfReflect(observations: Observation[]): Promise<Insight[]> {
 **继续交流**：[inferloop.dev](https://inferloop.dev)
 
 遗忘算法的完整可运行 Demo 见 `examples/ch18-frontier/`。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

@@ -299,3 +299,9 @@ SELECT * FROM observations WHERE project = ? ORDER BY created_at DESC LIMIT ?
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 
 至此，mini-mem 从基础的同步版本扩展到了具备 AI 压缩、向量搜索、实时 UI 和多项目支持的完整系统。下一部分将讨论如何将这类系统从个人工具升级到企业级平台。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

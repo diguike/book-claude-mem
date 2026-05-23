@@ -272,3 +272,9 @@ print('Cognee installed. Requires Neo4j for full graph features.')
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 
 下一章将基于这些调研结论，设计从单机 Plugin 到分布式多租户平台的架构升级路径。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

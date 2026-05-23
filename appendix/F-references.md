@@ -114,3 +114,9 @@ MCP 的底层通信协议，支持请求/响应/通知三种消息类型。
 - **商业授权**：联系 inferloop.dev
 
 > 代码示例（`examples/` 目录）遵循 MIT 许可，可自由用于商业项目。
+
+---
+
+> 本附录来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

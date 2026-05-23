@@ -274,3 +274,9 @@ async function performGracefulShutdown(): Promise<void> {
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 
 下一章将深入存储层设计：SQLite Schema、FTS5 全文搜索、ChromaDB 向量同步的具体实现。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

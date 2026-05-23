@@ -116,3 +116,9 @@ graph TB
 ## 致谢
 
 感谢 Alex Newman 和 claude-mem 社区创建并维护了这个优秀的开源项目（AGPL-3.0），为 Agent Memory 领域提供了一个生产级的参考实现。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

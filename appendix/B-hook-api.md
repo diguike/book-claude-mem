@@ -129,3 +129,9 @@ last_synced: "2026-05-05T16:52:35Z"
 - 耗时操作应委托给后台 Worker
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
+
+---
+
+> 本附录来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

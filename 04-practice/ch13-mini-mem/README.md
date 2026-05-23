@@ -585,3 +585,9 @@ mini-mem 的完整可运行代码在 `examples/ch13-mini-mem/` 目录中。
 下一章将在 mini-mem 基础上扩展：接入 AI 压缩、向量搜索和 Viewer UI。
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

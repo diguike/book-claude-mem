@@ -207,3 +207,9 @@ Inject: 渐进式披露，让 Agent 自主决定
 下一章我们将具体认识 claude-mem 这个项目——它的能力全景、安装方式和日常使用场景。
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

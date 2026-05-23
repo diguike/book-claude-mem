@@ -190,3 +190,9 @@ query_corpus → [基于最新知识回答]
 至此，第三部分（核心机制篇）完成。从 Progressive Disclosure 的设计哲学，到 MCP 搜索的工具实现，到 Observation 的压缩流水线，再到 Knowledge Agent 的知识编译——这四章覆盖了 claude-mem 最核心的创新设计。
 
 下一部分（实战篇）将带你从零构建一个可运行的简版 Memory Plugin。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

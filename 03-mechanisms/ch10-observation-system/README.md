@@ -197,3 +197,9 @@ CREATE TABLE observation_feedback (
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 
 下一章分析 Knowledge Agent——如何从 Observation 集合中构建可查询的知识库。
+
+---
+
+> 本章来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)

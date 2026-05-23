@@ -136,3 +136,9 @@ function escapeFTS5(query: string): string {
 4. **中文分词效果差**：unicode61 按 Unicode 词边界分，中文每个字可能被当作独立 token
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
+
+---
+
+> 本附录来自《Agent Memory 工程实战》开源版 · 作者「递归客」  
+> 在线阅读完整书系：[inferloop.dev](https://inferloop.dev)  
+> 源码仓库：[github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)
