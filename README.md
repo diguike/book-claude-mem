@@ -6,6 +6,10 @@ last_synced: ""
 
 # Agent Memory 工程实战：从 claude-mem 源码到企业级记忆平台
 
+> 在线阅读 · [inferloop.dev/claude-mem](https://inferloop.dev/claude-mem)  
+> 所有书目 · [inferloop.dev](https://inferloop.dev)
+
+
 > **作者**：递归客 | **社区**：[inferloop.dev](https://inferloop.dev) | **协议**：CC BY-NC-SA 4.0
 
 基于 claude-mem 开源项目的深度源码解析，面向前端/全栈工程师的 Agent Memory 系统设计与实现指南。
@@ -56,3 +60,18 @@ npm run test:context # 查看索引输出
 - 个人学习转载：注明出处 + 链接回 [inferloop.dev](https://inferloop.dev)
 - 商业使用：请联系作者获取授权
 - 禁止：去除版权信息后二次分发
+
+
+## 相关书
+
+来自同一作者的其他书:
+
+- [《Hermes Agent 源码解读》](https://inferloop.dev/hermes-agent)
+- [《LLM Infra 工程实战》](https://inferloop.dev/llm-infra)
+- [《AI Token 中转站实战》](https://inferloop.dev/llm-gateway)
+- [《百万级 AI Agent 平台架构》](https://inferloop.dev/enterprise-agent)
+- [《OpenClaw 源码解析》](https://inferloop.dev/openclaw)
+- [《Transformer 教学》](https://inferloop.dev/transformer)
+- [《Claude Code Skill 开发指南》](https://inferloop.dev/claude-skill)
+- [《Claude 插件官方指南》](https://inferloop.dev/claude-plugins)
+- [《自己动手写 AI Agent》](https://inferloop.dev/ling-agent)

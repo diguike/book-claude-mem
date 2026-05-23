@@ -4,6 +4,10 @@ feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KAKQwYDjRiqn9DklFT4cwrpVnOf"
 last_synced: "2026-05-05T16:52:35Z"
 ---
 
+> **配套资源**  
+> 源码仓库 · [github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)  
+> 在线阅读 · [inferloop.dev/claude-mem](https://inferloop.dev/claude-mem)
+
 ## 为什么写这本书
 
 2025 年下半年，Agent 开发从"能跑通 Demo"进入了"能上生产"的阶段。越来越多的工程师开始构建真正有用的 AI Agent，但很快就撞上同一堵墙：Agent 没有记忆。
