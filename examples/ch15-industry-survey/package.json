@@ -1,0 +1,15 @@
+{
+  "name": "ch15-industry-survey",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "各方案核心 API 调用对比",
+  "scripts": {
+    "demo:mem0": "tsx src/mem0-example.ts",
+    "demo:compare": "tsx src/comparison-table.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}

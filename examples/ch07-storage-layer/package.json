@@ -1,0 +1,19 @@
+{
+  "name": "ch07-storage-layer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "SQLite FTS5 全文搜索与 WAL 模式实战",
+  "scripts": {
+    "demo": "tsx src/fts5-demo.ts",
+    "wal": "tsx src/wal-demo.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

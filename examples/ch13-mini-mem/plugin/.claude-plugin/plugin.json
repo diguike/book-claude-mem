@@ -1,0 +1,5 @@
+{
+  "name": "mini-mem",
+  "version": "1.0.0",
+  "description": "Minimal Agent Memory Plugin — stores observations and injects context"
+}

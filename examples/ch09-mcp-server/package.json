@@ -1,0 +1,19 @@
+{
+  "name": "ch09-mcp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "最小化 MCP Server 实现：search + get_observations + timeline",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "test": "tsx src/test-client.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

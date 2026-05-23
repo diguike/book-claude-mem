@@ -1,0 +1,16 @@
+{
+  "name": "ch17-enterprise-features",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "RBAC + 数据脱敏 + 审计日志",
+  "scripts": {
+    "demo:rbac": "tsx src/rbac.ts",
+    "demo:sanitizer": "tsx src/sanitizer.ts",
+    "demo:audit": "tsx src/audit-logger.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "ch02-quick-start",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "claude-mem 常用配置模板与验证脚本",
+  "scripts": {
+    "demo": "tsx src/verify-install.ts",
+    "config": "tsx src/config-templates.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

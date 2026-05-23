@@ -1,0 +1,14 @@
+{
+  "name": "ch05-hook-playground",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Hook 模拟器：演示 Claude Code Hook 调用流程",
+  "scripts": {
+    "demo": "tsx src/hook-simulator.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

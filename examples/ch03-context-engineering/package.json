@@ -1,0 +1,15 @@
+{
+  "name": "ch03-context-engineering",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Token 计算器与注入策略对比演示",
+  "scripts": {
+    "demo": "tsx src/token-counter.ts",
+    "compare": "tsx src/injection-strategies.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

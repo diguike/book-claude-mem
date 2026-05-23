@@ -1,0 +1,20 @@
+{
+  "name": "ch06-worker-queue",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Express + SQLite 队列 Demo",
+  "scripts": {
+    "demo": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/express": "^5.0.0"
+  }
+}

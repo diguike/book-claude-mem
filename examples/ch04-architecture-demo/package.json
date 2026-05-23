@@ -1,0 +1,14 @@
+{
+  "name": "ch04-architecture-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "模拟 claude-mem 4 层架构的最小 Demo",
+  "scripts": {
+    "demo": "tsx src/index.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

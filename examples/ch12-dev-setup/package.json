@@ -1,0 +1,20 @@
+{
+  "name": "ch12-dev-setup",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "开发环境验证脚本：检查 Node.js/Bun/SQLite/MCP 配置",
+  "scripts": {
+    "check": "tsx src/check-env.ts",
+    "check:sqlite": "tsx src/check-sqlite.ts",
+    "check:plugin": "tsx src/check-plugin.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

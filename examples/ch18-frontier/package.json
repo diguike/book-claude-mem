@@ -1,0 +1,15 @@
+{
+  "name": "ch18-retention-score",
+  "version": "1.0.0",
+  "description": "第 18 章配套：遗忘算法 Demo — 计算 Observation 的保留分数",
+  "type": "module",
+  "scripts": {
+    "demo": "tsx src/retention-demo.ts",
+    "visualize": "tsx src/visualize.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

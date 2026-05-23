@@ -1,0 +1,20 @@
+{
+  "name": "ch11-knowledge-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Knowledge Agent Build→Prime→Query 流程 Demo",
+  "scripts": {
+    "demo": "tsx src/index.ts",
+    "demo:build": "tsx src/build-corpus.ts",
+    "demo:query": "tsx src/query-corpus.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

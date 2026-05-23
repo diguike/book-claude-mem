@@ -1,0 +1,23 @@
+{
+  "name": "mini-mem",
+  "version": "1.0.0",
+  "description": "简版 Agent Memory Plugin — 第13章实战项目",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test:save": "echo '{\"session_id\":\"test\",\"cwd\":\"/tmp/demo\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"src/index.ts\"},\"tool_response\":{\"success\":true}}' | node dist/hooks/save-hook.js",
+    "test:context": "echo '{\"session_id\":\"test\",\"cwd\":\"/tmp/demo\",\"source\":\"startup\"}' | node dist/hooks/context-hook.js",
+    "test:search": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' | node dist/mcp/server.js",
+    "install-plugin": "ln -sf $(pwd)/plugin ~/.claude/plugins/mini-mem && echo 'Plugin linked. Restart Claude Code.'"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

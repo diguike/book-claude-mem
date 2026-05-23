@@ -1,0 +1,19 @@
+{
+  "name": "ch01-memory-comparison",
+  "version": "1.0.0",
+  "description": "对比不同 Memory 策略（全量注入 vs RAG vs Progressive Disclosure）的 Token 效率",
+  "type": "module",
+  "scripts": {
+    "demo": "tsx src/index.ts",
+    "demo:rag": "tsx src/rag-strategy.ts",
+    "demo:progressive": "tsx src/progressive-strategy.ts"
+  },
+  "dependencies": {
+    "tiktoken": "^1.0.18"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
