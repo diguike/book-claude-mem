@@ -1,10 +1,8 @@
 ---
 title: "附录 B：Claude Code Hook API 速查"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/SE3OwrStlihD2WkVQAUc61oRnVb"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:19+08:00"
 ---
-
-# 附录 B：Claude Code Hook API 速查
 
 ## Hook 事件类型
 

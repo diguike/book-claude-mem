@@ -1,8 +1,50 @@
 ---
 title: "第 16 章：从 Plugin 到平台的架构升级"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/AfWHw1XmhilSuWkD8eyc9KmInIg"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:05+08:00"
 ---
+
+动手改造之前，先把升级前后的两张拓扑图摆在一起。如图 16-1 所示，claude-mem 当前的单机 Plugin 形态里，Hook、Worker、存储全部运行在用户本机，组件之间只有本地进程通信——没有认证、没有租户隔离、也没有扩容问题，这正是它架构简单的原因。
+
+```mermaid
+graph TB
+    subgraph local["用户本机（单进程边界，无跨网络调用）"]
+        CC["Claude Code"] -->|"Hook 事件<br/>stdin/stdout JSON"| Hook["Hook 入口<br/>src/cli/hook-command.ts"]
+        Hook -->|"HTTP localhost"| Worker["Worker 单进程<br/>src/services/worker-service.ts<br/>压缩 / 搜索 / 上下文生成"]
+        Worker --> SQLite[("SQLite<br/>observations + FTS5 全文索引")]
+        Worker --> Chroma[("ChromaDB<br/>向量索引，src/services/sync/ 同步")]
+    end
+```
+
+*图 16-1：单机 Plugin 架构拓扑（claude-mem 现状）*
+
+升级为多用户平台后，拓扑变成图 16-2 的形态：客户端只保留轻量适配层，认证、队列、AI 压缩、存储全部移到服务端。图中每一条跨越子框边界的连线都是跨进程或跨网络调用，随之而来的认证、隔离、并发问题，正是本章四个小节要逐个解决的。
+
+```mermaid
+graph TB
+    subgraph clients["客户端（各用户机器）"]
+        A1["Claude Code<br/>Hook + MCP"]
+        A2["Cursor / VS Code<br/>Webhook 适配层"]
+        A3["自研 Agent<br/>@mini-mem/sdk"]
+    end
+    subgraph platform["平台服务（服务端集群，跨网络边界）"]
+        GW["API 网关 /api/events<br/>JWT 认证中间件，解析 userId / orgId"]
+        Q[("Redis + BullMQ<br/>observations 队列，按组织分队列")]
+        W["Worker 集群 ×N<br/>compressObservation，按队列深度扩缩容"]
+    end
+    subgraph storage["存储层"]
+        PG[("PostgreSQL + pgvector<br/>RLS 行级隔离<br/>tsvector 全文搜索 + 向量搜索")]
+    end
+    A1 -->|"HTTPS"| GW
+    A2 -->|"HTTPS"| GW
+    A3 -->|"HTTPS"| GW
+    GW -->|"tool_use / session_end 异步入队"| Q
+    Q --> W
+    W -->|"storeObservation 带 org_id 写入"| PG
+    GW -->|"session_start 同步查询上下文"| PG
+```
+
+*图 16-2：分布式平台架构拓扑（目标形态）*
 
 ## 单用户 → 多用户：认证与隔离
 

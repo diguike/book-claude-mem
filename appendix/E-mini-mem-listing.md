@@ -1,10 +1,8 @@
 ---
 title: "附录 E：mini-mem 完整源码清单"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/EEBGwjO9fi6cnXkvnx7cWlU9nWh"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:26+08:00"
 ---
-
-# 附录 E：mini-mem 完整源码清单
 
 完整项目位于 `examples/ch13-mini-mem/`，以下是关键文件的路径和职责：
 

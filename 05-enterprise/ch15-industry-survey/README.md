@@ -1,7 +1,7 @@
 ---
 title: "第 15 章：业界 Agent Memory 方案调研"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KDaYw1QwniHcpSk1QHacu3GOn3e"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:01+08:00"
 ---
 
 ## OpenAI Memory / ChatGPT Memory 机制分析
@@ -237,6 +237,34 @@ print('Cognee installed. Requires Neo4j for full graph features.')
 
 ## 各方案横向对比与启发提炼
 
+按"记忆由谁管理、服务于哪一层"来划分，7 个方案的定位如图 15-1 所示：
+
+```mermaid
+graph TB
+    subgraph product[产品内置记忆]
+        OA["OpenAI Memory<br/>消费级聊天，全自动短句记忆"]
+    end
+    subgraph runtime[Agent Runtime 层]
+        LC["LangChain / LangGraph Memory<br/>框架内对话记忆管理"]
+        MG["MemGPT / Letta<br/>Agent 自管理的 OS 式内存"]
+    end
+    subgraph infra[独立记忆基础设施]
+        M0["Mem0<br/>多层记忆 + Graph Memory"]
+        ZP["Zep<br/>时间感知 + 自动摘要"]
+        CG["Cognee<br/>知识图谱驱动"]
+    end
+    subgraph devtool[Developer Tool 层]
+        CM["claude-mem<br/>IDE 原生，Progressive Disclosure"]
+    end
+    product ~~~ runtime
+    runtime ~~~ infra
+    infra ~~~ devtool
+```
+
+*图 15-1：7 个 Agent Memory 方案的定位分类*
+
+再从能力维度做横向对比：
+
 | 方案 | 最大优势 | 最大限制 | 适用场景 | 开源 | Star 量级 |
 |------|---------|---------|---------|------|----------|
 | OpenAI Memory | 零配置，全自动 | 粒度粗，容量小 | 消费级聊天 | 否 | - |
@@ -256,8 +284,6 @@ print('Cognee installed. Requires Neo4j for full graph features.')
 3. **来自 MemGPT**：Agent 应有"主动管理记忆"的能力
 4. **来自 Cognee**：知识图谱做关系追溯和冲突检测
 5. **来自 claude-mem**：Progressive Disclosure + Hook 驱动的非侵入性
-
----
 
 ---
 

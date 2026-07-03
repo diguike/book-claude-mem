@@ -1,7 +1,7 @@
 ---
 title: "第 1 章：Agent Memory 问题域"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/QQUTw25uxiRDE8kDhNccuBvunbf"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:09+08:00"
 ---
 
 ## 5 分钟体验：先感受问题，再理解问题
@@ -69,7 +69,26 @@ Claude 的回答大概率是："我没有之前会话的上下文，能否告诉
 
 ## Memory 系统的三个核心问题
 
-设计 Agent Memory 系统时，必须回答三个问题：
+设计 Agent Memory 系统时，必须回答三个问题：记什么、怎么记、怎么用。三个问题与 claude-mem 给出的答案的对应关系如图 1-1 所示，下面逐一展开。
+
+```mermaid
+graph LR
+    subgraph problems[三个核心问题]
+        Q1["记什么<br/>What to capture"]
+        Q2["怎么记<br/>How to store"]
+        Q3["怎么用<br/>How to retrieve"]
+    end
+    subgraph solutions[claude-mem 的解法]
+        A1["自动捕获全部 Tool Usage<br/>AI 压缩提取高价值信息"]
+        A2["SQLite + FTS5 + ChromaDB<br/>Hook 快速入队，Worker 异步落库"]
+        A3["Progressive Disclosure<br/>轻量索引 + MCP 按需获取"]
+    end
+    Q1 --> A1
+    Q2 --> A2
+    Q3 --> A3
+```
+
+*图 1-1：Memory 系统的三个核心问题与 claude-mem 的对应解法*
 
 ### 记什么（What to capture）
 
@@ -191,8 +210,6 @@ Inject: 渐进式披露，让 Agent 自主决定
 ```
 
 这三步形成一个正向循环：观察越多，记忆越丰富，Agent 在未来会话中能获取的上下文越精准。
-
----
 
 ---
 

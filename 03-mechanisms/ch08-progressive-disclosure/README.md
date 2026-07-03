@@ -1,7 +1,7 @@
 ---
 title: "第 8 章：Progressive Disclosure — 渐进式信息披露"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/G7ZiwrG2bi7sxUkEx8ycTZlwnKh"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:39+08:00"
 ---
 
 ## 设计哲学：让 Agent 自己决定看什么
@@ -26,6 +26,25 @@ Progressive Disclosure：
 
 ## 三层工作流：Index → Context → Details
 
+三层的协作方式如图 8-1 所示：系统只在会话开始时推送一次轻量索引，之后的每一步都由 Agent 主动发起，Token 成本逐层递增、按需支付。
+
+```mermaid
+sequenceDiagram
+    participant H as SessionStart Hook
+    participant A as Agent
+    participant M as MCP 搜索工具
+
+    H->>A: Layer 1：注入索引（50 条标题行，约 800-2000 Token）
+    Note over A: 扫描标题与图标，判断哪些记录<br/>与当前任务相关
+    A->>M: timeline({ anchor: 1235, depth_before: 3, depth_after: 3 })
+    M-->>A: Layer 2：时间线上下文（7 条摘要，约 200-400 Token）
+    A->>M: get_observations({ ids: [1235] })
+    M-->>A: Layer 3：完整详情（单条约 120-500 Token）
+    Note over A,M: 判断为不相关的记录停在 Layer 1，<br/>不产生任何额外成本
+```
+
+图 8-1：Index → Context → Details 三层渐进披露的数据流。系统只推送一次索引（每条约 20-30 Token），Context 和 Details 由 Agent 按需拉取，每深入一层，单条记录的 Token 成本上升一个量级。
+
 ### Layer 1：Index（搜索索引）
 
 SessionStart Hook 注入的是一张"目录"，约 800-2000 Token：
@@ -36,14 +55,14 @@ SessionStart Hook 注入的是一张"目录"，约 800-2000 Token：
 **General**
 | ID | Time | T | Title | Tokens |
 |----|------|---|-------|--------|
-| #1234 | 2:15 PM | 🟤 | 选用 pgvector 做向量搜索 | ~180 |
-| #1235 | 2:30 PM | 🟡 | 修复连接池泄漏 | ~120 |
+| #1234 | 2:15 PM | ⚖️ | 选用 pgvector 做向量搜索 | ~180 |
+| #1235 | 2:30 PM | 🔴 | 修复连接池泄漏 | ~120 |
 | #1236 | 3:00 PM | 🔵 | Worker 端口计算逻辑 | ~95 |
 
 **src/services/auth.ts**
 | ID | Time | T | Title | Tokens |
 |----|------|---|-------|--------|
-| #1237 | 3:15 PM | 🟢 | JWT 验证改为异步 | ~155 |
+| #1237 | 3:15 PM | ✅ | JWT 验证改为异步 | ~155 |
 ```
 
 每条记录约占 20-30 Token（ID + 时间 + 图标 + 标题 + Token 数，中文标题比英文消耗更多 Token），50 条记录总共约 1,000-1,500 Token。
@@ -75,7 +94,7 @@ get_observations({ ids: [1235] })
 索引表的最后一列是 `Tokens`，展示获取该条完整内容的预估成本：
 
 ```
-| #1234 | 2:15 PM | 🟤 | 选用 pgvector 做向量搜索 | ~180 |
+| #1234 | 2:15 PM | ⚖️ | 选用 pgvector 做向量搜索 | ~180 |
                                                       ^^^^
                                                    "这条详情约 180 Token"
 ```
@@ -112,27 +131,34 @@ claude-mem 的 AI 压缩 Prompt 中有明确的标题生成指导，确保 SDK A
 
 ## 图标分类系统的认知负载优化
 
-```
-🎯 session-request  — 用户原始目标
-🔴 gotcha          — 关键陷阱/边界条件
-🟡 problem-solution — Bug 修复或变通方案
-🔵 how-it-works    — 技术原理说明
-🟢 what-changed    — 代码/架构变更
-🟣 discovery       — 学习或洞察
-🟠 why-it-exists   — 设计理由
-🟤 decision        — 架构决策
-⚖️ trade-off       — 有意识的折中
-```
+索引表的 `T` 列是 Observation 的类型图标。这里要先分清两个容易混淆的维度：**type**（类型）和 **concept**（概念标签）。type 有图标，出现在索引表中；concept 没有图标，只作为检索时的过滤条件。
+
+Type 到图标的映射定义在 `src/cli/claude-md-commands.ts` 的 `TYPE_ICONS` 常量中：
+
+| Type | 图标 | 含义 |
+|------|------|------|
+| bugfix | 🔴 | Bug 修复 |
+| feature | 🟣 | 新功能 |
+| refactor | 🔄 | 重构 |
+| change | ✅ | 代码/配置变更 |
+| discovery | 🔵 | 学习或洞察 |
+| decision | ⚖️ | 架构决策 |
+| session | 🎯 | 会话摘要 |
+| prompt | 💬 | 用户原始请求 |
+
+未知类型统一回退到 📝（`getTypeIcon` 函数）。
+
+Concept 标签描述的是内容的知识形态，是与 type 正交的独立维度，共 7 个：how-it-works、why-it-exists、what-changed、problem-solution、gotcha、pattern、trade-off。它们不显示在索引表中，用途是检索过滤——`SearchManager` 通过 `sessionSearch.findByConcept()` 按 concept 查找 Observation，对应 HTTP 路由 `/search/by-concept`。一条 Observation 有一个 type 和若干 concept：比如"修复连接池泄漏"的 type 是 bugfix（索引中显示 🔴），concept 可能同时打上 problem-solution 和 gotcha。
 
 图标系统的设计考量：
 
 **视觉扫描**：彩色图标比文本标签更容易被视觉系统捕获，无论是人类还是 LLM。
 
-**优先级信号**：🔴 gotcha 是最需要被关注的（已知陷阱），🟤 decision 次之（避免冲突决策），🔵 how-it-works 最低优先级（纯知识性内容）。
+**优先级信号**：🔴 bugfix 和 ⚖️ decision 最需要被关注（前者标记已修复的问题，后者避免做出冲突决策），🔵 discovery 优先级较低（知识性内容，需要时再查）。
 
-**Token 效率**：1 个 emoji = 1 Token，而 "problem-solution" = 2-3 Token。在 50 条索引中节省 50-100 Token。
+**Token 效率**：1 个 emoji 通常只占 1-2 个 Token——不同 tokenizer 对 emoji 的编码方式不同，这个数字是量级示意而非精确值——而 "problem-solution" 这样的文本标签要 2-3 个 Token。在 50 条索引中能节省几十个 Token。
 
-**模式识别**：Agent 看到连续多个 🟡 时可以推断"那段时间在密集修 Bug"，看到 🟤 集中出现可以推断"那是一次架构决策会议"。
+**模式识别**：Agent 看到连续多个 🔴 时可以推断"那段时间在密集修 Bug"，看到 ⚖️ 集中出现可以推断"那是一次架构决策会议"。
 
 ## 对比传统 RAG 的效率差异
 
@@ -163,8 +189,6 @@ Token 节省：15,000 → 1,050（节省 93%）。
 但更重要的差异不在 Token 数量，而在**相关性准确率**：
 - RAG 的命中率取决于 Embedding 质量和 Query 的表达
 - Progressive Disclosure 的命中率取决于 Agent 的判断力——而 Agent 正在处理用户的实际 prompt，它对"什么是相关的"有最准确的认知
-
----
 
 ---
 

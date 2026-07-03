@@ -1,10 +1,8 @@
 ---
 title: "附录 F：参考资料"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Wzlhwc5YmiQthXkxZhScz1yKnkl"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:30+08:00"
 ---
-
-# 附录 F：参考资料
 
 ## 核心项目
 

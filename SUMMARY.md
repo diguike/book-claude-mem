@@ -61,7 +61,7 @@ last_synced: ""
 - 6.4 SDK Agent 的 Generator 模式与重启策略
 - 6.5 Session ID 双轨制：contentSessionId vs memorySessionId
 - 6.6 进程管理：PID 文件、健康检查、Orphan Reaper
-- 6.7 Graceful Shutdown 七步法
+- 6.7 Graceful Shutdown：六步顺序关闭
 - 配套代码：`examples/ch06-worker-queue/` — Express + SQLite 队列的完整异步处理 Demo
 
 ### 第 7 章：存储层设计
@@ -70,7 +70,7 @@ last_synced: ""
 - 7.3 WAL 模式与并发读写
 - 7.4 ChromaDB 向量存储：Embedding 同步策略
 - 7.5 混合检索：关键词 + 语义的 Hybrid Search
-- 7.6 Deduplication：内容哈希去重的 30 秒窗口
+- 7.6 Deduplication：数据库层的内容哈希去重
 - 配套代码：`examples/ch07-storage-layer/` — SQLite FTS5 + better-sqlite3 实战 + ChromaDB 接入示例
 
 ## 第三部分：核心机制篇 — 深入关键实现
@@ -90,7 +90,7 @@ last_synced: ""
 - 9.3 `__IMPORTANT` 工具：用工具定义引导行为
 - 9.4 search → timeline → get_observations 三步曲
 - 9.5 MCP Server 实现：协议翻译层的极简设计
-- 9.6 FTS5 注入防护：332 个攻击测试用例
+- 9.6 FTS5 注入防护：短语包裹与引号转义
 - 配套代码：`examples/ch09-mcp-server/` — 从零实现一个 MCP Server（TypeScript + @modelcontextprotocol/sdk）
 
 ### 第 10 章：Observation 系统
@@ -166,7 +166,7 @@ last_synced: ""
 - 配套代码：`examples/ch17-enterprise-features/` — RBAC 权限 + 数据脱敏 + 审计日志模块
 
 ### 第 18 章：前沿探索
-- 18.1 RAD (Real-Time Agent Data) 开放标准
+- 18.1 记忆互操作性：一个还不存在的标准
 - 18.2 Agent Memory 与 Agent-to-Agent 协作
 - 18.3 长期记忆的遗忘曲线：何时淘汰旧知识
 - 18.4 多模态记忆：代码之外的设计稿、对话、文档
@@ -180,4 +180,4 @@ last_synced: ""
 ### 附录 C：MCP 协议规范要点
 ### 附录 D：SQLite FTS5 语法速查
 ### 附录 E：mini-mem 完整源码清单
-### 附录 F：推荐阅读与参考资料
+### 附录 F：参考资料

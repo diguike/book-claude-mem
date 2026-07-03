@@ -42,6 +42,52 @@ npm run test:save    # 模拟工具调用
 npm run test:context # 查看索引输出
 ```
 
+## 目录
+
+- [前言](00-preface/README.md)
+
+**第一部分　认知篇 — 为什么 Agent 需要记忆**
+
+- [第 1 章　Agent Memory 问题域](01-cognition/ch01-problem-domain/README.md)
+- [第 2 章　认识 claude-mem — 能力全景与快速上手](01-cognition/ch02-claude-mem-intro/README.md)
+- [第 3 章　Context Engineering 基础](01-cognition/ch03-context-engineering/README.md)
+
+**第二部分　架构篇 — claude-mem 全景解析**
+
+- [第 4 章　系统架构总览](02-architecture/ch04-system-overview/README.md)
+- [第 5 章　Hook 驱动的生命周期](02-architecture/ch05-hook-lifecycle/README.md)
+- [第 6 章　Worker Service — 异步处理引擎](02-architecture/ch06-worker-service/README.md)
+- [第 7 章　存储层设计](02-architecture/ch07-storage/README.md)
+
+**第三部分　核心机制篇 — 深入关键实现**
+
+- [第 8 章　Progressive Disclosure — 渐进式信息披露](03-mechanisms/ch08-progressive-disclosure/README.md)
+- [第 9 章　MCP 搜索架构](03-mechanisms/ch09-mcp-search/README.md)
+- [第 10 章　Observation 系统](03-mechanisms/ch10-observation-system/README.md)
+- [第 11 章　Knowledge Agent — 知识库构建](03-mechanisms/ch11-knowledge-agent/README.md)
+
+**第四部分　实战篇 — 从零构建 Memory Plugin**
+
+- [第 12 章　开发环境搭建](04-practice/ch12-dev-setup/README.md)
+- [第 13 章　实现简版 Memory Plugin（mini-mem）](04-practice/ch13-mini-mem/README.md)
+- [第 14 章　进阶功能扩展](04-practice/ch14-extensions/README.md)
+
+**第五部分　进阶篇 — 企业级 Memory 平台**
+
+- [第 15 章　业界 Agent Memory 方案调研](05-enterprise/ch15-industry-survey/README.md)
+- [第 16 章　从 Plugin 到平台的架构升级](05-enterprise/ch16-platform-upgrade/README.md)
+- [第 17 章　企业级特性设计](05-enterprise/ch17-enterprise-features/README.md)
+- [第 18 章　前沿探索](05-enterprise/ch18-frontier/README.md)
+
+**附录**
+
+- [附录 A　claude-mem 源码导航图](appendix/A-source-map.md)
+- [附录 B　Claude Code Hook API 速查](appendix/B-hook-api.md)
+- [附录 C　MCP 协议规范要点](appendix/C-mcp-protocol.md)
+- [附录 D　SQLite FTS5 语法速查](appendix/D-fts5-syntax.md)
+- [附录 E　mini-mem 完整源码清单](appendix/E-mini-mem-listing.md)
+- [附录 F　参考资料](appendix/F-references.md)
+
 ## 参考项目
 
 - 源码：`_references/claude-mem/` (v12.6.2, AGPL-3.0)

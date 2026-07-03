@@ -1,7 +1,7 @@
 ---
 title: "第 11 章：Knowledge Agent — 知识库构建"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/LVFowV8KciUj8CkDuF3cyVosnCh"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:50+08:00"
 ---
 
 ## 从 Observations 到 Corpus 的编译过程
@@ -161,19 +161,23 @@ Reprime 创建一个全新的 AI 会话并重新加载 Corpus。这也会清除�
 
 ### 生命周期
 
+把上述工具串起来，Corpus 的完整状态流转如图 11-1 所示：
+
+```mermaid
+stateDiagram-v2
+    [*] --> Defined: build_corpus
+    Defined: Corpus 已定义（过滤规则 + Observation 列表）
+    Defined --> Primed: prime_corpus
+    Primed: 知识已加载（AI 会话就绪，可反复 query_corpus）
+    Primed --> Primed: query_corpus
+    Primed --> Stale: rebuild_corpus
+    Stale: Corpus 已更新（AI 会话仍基于旧知识）
+    Stale --> Primed: reprime_corpus
 ```
-build_corpus → [Corpus 定义存储]
-  ↓
-prime_corpus → [AI 会话创建，知识加载]
-  ↓
-query_corpus → [基于知识回答] ← 可反复调用
-  ↓
-rebuild_corpus → [重新查询，更新 Observation 列表]
-  ↓
-reprime_corpus → [新会话，重新加载]
-  ↓
-query_corpus → [基于最新知识回答]
-```
+
+*图 11-1：Corpus 的 Build → Prime → Query 生命周期*
+
+注意 rebuild_corpus 之后的中间态：Observation 列表已经更新，但已 Prime 的会话还停留在旧知识上，必须 reprime_corpus 才能让后续 query_corpus 基于最新知识回答。
 
 ---
 

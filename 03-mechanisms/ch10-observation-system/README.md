@@ -1,7 +1,7 @@
 ---
 title: "第 10 章：Observation 系统"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/InRkwRHW1i6jnakDJxZcZj8nnXb"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:46+08:00"
 ---
 
 ## 什么值得记：Tool Usage 作为观察单元
@@ -35,7 +35,22 @@ claude-mem 的记忆单元不是"对话消息"也不是"文件变更"，而是 *
 
 ## AI 压缩流水线
 
-原始 Tool Usage 到结构化 Observation 的转换，由 Worker 内部的 Claude Agent SDK 完成。流水线分四步：
+原始 Tool Usage 到结构化 Observation 的转换，由 Worker 内部的 Claude Agent SDK 完成。整条生命周期如图 10-1 所示：
+
+```mermaid
+flowchart LR
+    A[工具调用发生<br/>PostToolUse Hook] --> B[隐私标签剥离<br/>src/utils/tag-stripping.ts]
+    B --> C[Worker 消息积累<br/>pending_messages]
+    C --> D[SDK Agent 压缩<br/>提取结构化 Observation]
+    D --> E{content_hash 去重<br/>ON CONFLICT DO NOTHING}
+    E -->|新内容| F[(observations 表)]
+    E -->|重复| G[丢弃]
+    F --> H[ChromaDB 同步<br/>+ SSE 广播 Viewer]
+```
+
+图 10-1：一条 Observation 从工具调用发生到入库的生命周期。隐私剥离在 Hook 层完成（数据进入 Worker 之前），去重靠 SQLite 唯一索引在写入时完成。
+
+流水线的核心是中间四步，分开来看：
 
 ### Step 1：消息积累
 
@@ -83,7 +98,7 @@ SDK Agent 返回结构化的 XML 或 JSON 响应：
 ### Step 4：存储与同步
 
 解析成功后：
-1. 计算 content_hash，检查 30 秒去重窗口
+1. 计算 content_hash，写入时靠 `UNIQUE(memory_session_id, content_hash)` 唯一索引去重：`INSERT ... ON CONFLICT DO NOTHING`（`src/services/sqlite/transactions.ts`）。同一会话内内容完全相同的 Observation 会被直接丢弃，这是永久约束，不存在时间窗口
 2. INSERT INTO observations
 3. 同步 Embedding 到 ChromaDB
 4. 通过 SSE 广播到 Viewer UI
@@ -105,19 +120,24 @@ SDK Agent 返回结构化的 XML 或 JSON 响应：
 | `content_hash` | string | SHA256[:16] 去重哈希 |
 | `token_estimate` | number | 预估 Token 数 |
 
-**type 的完整取值**：
+**type 的取值与图标**（`src/cli/claude-md-commands.ts` 中的 `TYPE_ICONS` 映射）：
 
 | type | 含义 | 图标 |
 |------|------|------|
-| session-request | 用户原始目标 | 🎯 |
-| gotcha | 关键陷阱/边界条件 | 🔴 |
-| problem-solution | Bug 修复 | 🟡 |
-| how-it-works | 技术原理 | 🔵 |
-| what-changed | 代码变更 | 🟢 |
-| discovery | 学习洞察 | 🟣 |
-| why-it-exists | 设计理由 | 🟠 |
-| decision | 架构决策 | 🟤 |
-| trade-off | 有意折中 | ⚖️ |
+| bugfix | Bug 修复 | 🔴 |
+| feature | 新功能 | 🟣 |
+| refactor | 重构 | 🔄 |
+| change | 代码变更 | ✅ |
+| discovery | 学习洞察 | 🔵 |
+| decision | 架构决策 | ⚖️ |
+| session | 会话级记录 | 🎯 |
+| prompt | 用户 prompt | 💬 |
+
+未匹配到上表的 type 回退为 📝。
+
+**concept 是另一个独立维度**。它没有图标，存放在 `concepts` 字段中，用于检索时的语义过滤，常见取值包括：`how-it-works`（技术原理）、`why-it-exists`（设计理由）、`what-changed`（变更内容）、`problem-solution`（问题与方案）、`gotcha`（关键陷阱）、`pattern`（可复用模式）、`trade-off`（有意折中）。
+
+type 回答"这条记录是什么动作"，concept 回答"这条知识属于什么类别"，两者是 Observation 上正交的两个字段。一条 bugfix 类型的 Observation 完全可以同时带上 `gotcha` 和 `problem-solution` 两个 concept 标签。
 
 ## 文件关联与空间分组
 
@@ -127,7 +147,7 @@ Observation 中的 `files_read` 和 `files_modified` 字段不仅是记录，更
 **src/services/auth.ts**
 | ID | Time | T | Title | Tokens |
 |----|------|---|-------|--------|
-| #1237 | 3:15 PM | 🟢 | JWT 验证改为异步 | ~155 |
+| #1237 | 3:15 PM | ✅ | JWT 验证改为异步 | ~155 |
 | #1238 | 3:20 PM | 🔴 | secret 不能为 undefined | ~80 |
 ```
 
@@ -190,7 +210,7 @@ CREATE TABLE observation_feedback (
 
 1. 什么样的工具调用"不值得"记录为 Observation？设计一个过滤规则，包含至少 3 个维度（如调用频率、信息增量、可复用性）。
 2. `viewed → fetched → cited` 三级信号中，`cited` 最有价值但也最难采集（需要分析 Agent 输出文本）。设计一个可靠的 `cited` 信号检测方案。
-3. 如果两条 Observation 的内容有 80% 重叠但时间跨度达 3 天（超出去重窗口），应该合并还是保留两条？设计一个"语义去重"策略。
+3. content_hash 去重只能拦截同一会话内内容完全相同的 Observation。如果两条 Observation 的内容有 80% 重叠但分属不同会话（唯一约束管不到），应该合并还是保留两条？设计一个"语义去重"策略。
 
 ---
 

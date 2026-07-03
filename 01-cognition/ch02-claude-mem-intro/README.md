@@ -1,7 +1,7 @@
 ---
 title: "第 2 章：认识 claude-mem — 能力全景与快速上手"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/R7FYw8Wf2iRdvFktJE3cmi6nn6d"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:13+08:00"
 ---
 
 ## claude-mem 是什么
@@ -10,25 +10,35 @@ last_synced: "2026-05-05T16:52:35Z"
 
 它不需要你做任何事情——安装后全自动运行。你正常使用 Claude Code 写代码，claude-mem 在后台默默观察、记录、压缩。下次开会话时，相关的历史上下文自动出现在 Claude 的视野中。
 
-从技术角度，claude-mem 由以下几个部分组成：
+从技术角度，claude-mem 分为三层：Claude Code 主进程负责观察和查询，Worker 守护进程负责压缩和编排，存储层负责持久化。数据自上而下写入，搜索请求横穿三层，如图 2-1 所示。
 
+```mermaid
+graph TB
+    subgraph CC["Claude Code 主进程"]
+        HK["5 个生命周期 Hook（观察点）<br/>src/cli/hook-command.ts"]
+        MC["MCP Client（搜索接口）<br/>plugin/scripts/mcp-server.cjs"]
+    end
+    subgraph WK["Worker 守护进程（Express API，端口 37700 + uid%100）"]
+        SM["SessionManager（会话管理，接收 Hook 事件）<br/>src/services/worker/"]
+        AG["SDK Agent（AI 压缩引擎，生成 Observation）<br/>src/services/worker/agents/"]
+        SE["SearchManager（搜索编排，合并两路检索结果）<br/>src/services/worker/SearchManager.ts"]
+        VU["Viewer UI（Web 实时面板，SSE 推送）"]
+    end
+    subgraph ST["存储层"]
+        SQ["SQLite（结构化数据 + FTS5 全文搜索）<br/>src/services/sqlite/"]
+        CH["ChromaDB（向量 Embedding 语义搜索）<br/>src/services/sync/"]
+    end
+    HK -->|"POST 观察数据"| SM
+    MC -->|"搜索请求"| SE
+    SM -->|"入队压缩任务"| AG
+    AG -->|"写入 Observation"| SQ
+    SQ -->|"同步 Embedding"| CH
+    SE -->|"全文检索"| SQ
+    SE -->|"语义检索"| CH
+    SQ -.->|"实时数据流"| VU
 ```
-┌─────────────────────────────────────────────────────┐
-│  Claude Code 主进程                                  │
-│  ├── 5 个生命周期 Hook（观察点）                      │
-│  └── MCP Client（搜索接口）                          │
-├─────────────────────────────────────────────────────┤
-│  Worker 守护进程（Express API，端口 37700+）          │
-│  ├── SessionManager（会话管理）                       │
-│  ├── SDK Agent（AI 压缩引擎）                        │
-│  ├── SearchManager（搜索编排）                       │
-│  └── Viewer UI（Web 实时面板）                       │
-├─────────────────────────────────────────────────────┤
-│  存储层                                              │
-│  ├── SQLite（结构化数据 + FTS5 全文搜索）             │
-│  └── ChromaDB（向量 Embedding 语义搜索）              │
-└─────────────────────────────────────────────────────┘
-```
+
+图 2-1：claude-mem 的三层运行结构。观察数据从 Hook 单向流入存储层，搜索请求由 MCP Client 经 SearchManager 分发给 SQLite（关键词）和 ChromaDB（语义）两路。
 
 ## 五大核心能力
 
@@ -41,7 +51,7 @@ last_synced: "2026-05-05T16:52:35Z"
 后台 Worker 使用 Claude Agent SDK 对原始观察进行智能压缩。一次代码编辑操作可能产生几千 Token 的 diff 内容，压缩后变成一条约 100-200 Token 的结构化 Observation：
 
 ```
-类型：🟡 problem-solution
+类型：🔴 bugfix（concept: problem-solution）
 标题：Fixed race condition in session cleanup
 叙述：The SessionEnd hook was firing before Worker finished processing...
 事实：
@@ -49,6 +59,27 @@ last_synced: "2026-05-05T16:52:35Z"
   - 修复：改用 graceful completion（UPDATE + poll）替代 DELETE
 文件：src/hooks/cleanup-hook.ts, src/services/worker-service.ts
 ```
+
+每条 Observation 上有两个容易混淆的分类字段：`type` 和 `concept`。它们是**正交的两个维度**，同时存在于同一条记录上。
+
+**type（类型）**回答"这条记忆记录的是什么动作"。每种 type 在索引和 CLI 输出里对应一个固定图标，映射定义在 `src/cli/claude-md-commands.ts` 的 `TYPE_ICONS`：
+
+| type | 图标 | 含义 |
+|------|------|------|
+| `bugfix` | 🔴 | Bug 修复 |
+| `feature` | 🟣 | 新功能 |
+| `refactor` | 🔄 | 重构 |
+| `change` | ✅ | 一般变更 |
+| `discovery` | 🔵 | 探索发现 |
+| `decision` | ⚖️ | 技术决策 |
+| `session` | 🎯 | 会话记录 |
+| `prompt` | 💬 | 用户指令 |
+
+未知类型回退为 📝。注意 `src/cli/handlers/file-context.ts` 里还维护了一份只含前六项的精简版 `TYPE_ICONS`，回退图标是 ❓——两处没有共享常量，属于源码中的重复定义。
+
+**concept（概念标签）**回答"这条记忆是什么知识形态"，共 7 种：`how-it-works` / `why-it-exists` / `what-changed` / `problem-solution` / `gotcha` / `pattern` / `trade-off`。concept **没有图标**，它的用途是检索时按知识形态过滤（v6.4.9 起支持按 concept 过滤注入的上下文，见 CHANGELOG）。
+
+以上面的例子来说：这次修复的 type 是 `bugfix`（所以显示 🔴），concept 是 `problem-solution`（一个问题及其解法）。搜索时既可以按 `type="bugfix"` 找所有修复记录，也可以按 `concept="gotcha"` 找所有踩坑记录，两个维度互不替代。
 
 ### 3. 上下文注入（Inject）
 
@@ -121,25 +152,30 @@ http://localhost:37700
 
 ### 核心配置
 
-配置文件位于 `~/.claude-mem/settings.json`，首次运行自动创建。关键配置项：
+配置文件位于 `~/.claude-mem/settings.json`，首次运行自动创建。字段名统一采用大写下划线风格（全部定义和默认值见 `src/shared/SettingsDefaultsManager.ts`），值一律是字符串：
 
 ```json
 {
-  "contextObservations": 50,
-  "contextSessions": 10,
-  "workerPort": 37700
+  "CLAUDE_MEM_CONTEXT_OBSERVATIONS": "50",
+  "CLAUDE_MEM_CONTEXT_SESSION_COUNT": "10",
+  "CLAUDE_MEM_WORKER_PORT": "37777",
+  "CLAUDE_MEM_MODEL": "claude-haiku-4-5-20251001"
 }
 ```
 
+关键配置项：
+
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `contextObservations` | 50 | SessionStart 注入索引中包含的最近 Observation 数量 |
-| `contextSessions` | 10 | 注入的最近会话摘要数量 |
-| `workerPort` | 37700+(uid%100) | Worker API 端口 |
+| `CLAUDE_MEM_CONTEXT_OBSERVATIONS` | 50 | SessionStart 注入索引中包含的最近 Observation 数量 |
+| `CLAUDE_MEM_CONTEXT_SESSION_COUNT` | 10 | 注入的最近会话摘要数量 |
+| `CLAUDE_MEM_WORKER_PORT` | 37700+(uid%100) | Worker API 端口 |
+| `CLAUDE_MEM_WORKER_HOST` | 127.0.0.1 | Worker 监听地址 |
+| `CLAUDE_MEM_MODEL` | claude-haiku-4-5-20251001 | 压缩用的模型 |
+| `CLAUDE_MEM_DATA_DIR` | ~/.claude-mem | 数据目录路径 |
+| `CLAUDE_MEM_LOG_LEVEL` | INFO | 日志级别 |
 
-环境变量覆盖：
-- `CLAUDE_MEM_DATA_DIR`：数据目录路径（默认 `~/.claude-mem/`）
-- `CLAUDE_MEM_WORKER_PORT`：指定固定端口
+每个配置项都可以用**同名环境变量**覆盖，环境变量优先级高于 settings.json——这也是为什么字段名直接采用环境变量的命名风格，两边共用同一套 key。
 
 ## 日常使用场景
 
@@ -148,7 +184,7 @@ http://localhost:37700
 第一天你和 Claude 讨论了数据库 Schema 的设计方案，做出了几个关键决策。第二天开新会话继续开发时，不需要重述这些决策——SessionStart 注入的索引中会包含类似：
 
 ```
-| #342 | 昨天 3:15 PM | 🟤 | 用 jsonb 而非单独表存 metadata | ~180 |
+| #342 | 昨天 3:15 PM | ⚖️ | 用 jsonb 而非单独表存 metadata | ~180 |
 ```
 
 Claude 看到这条记录，自动知道 metadata 的存储方案已经确定，不会再给出冲突的建议。
@@ -242,8 +278,8 @@ claude-mem 通过 Skill 系统扩展了多个高级功能。Skill 是 Claude Cod
 
 ```json
 {
-  "contextObservations": 30,
-  "contextSessions": 5
+  "CLAUDE_MEM_CONTEXT_OBSERVATIONS": "30",
+  "CLAUDE_MEM_CONTEXT_SESSION_COUNT": "5"
 }
 ```
 
@@ -275,8 +311,6 @@ export CLAUDE_MEM_WORKER_PORT=37800
 # 个人环境（默认）
 export CLAUDE_MEM_DATA_DIR="$HOME/.claude-mem"
 ```
-
----
 
 ---
 

@@ -1,10 +1,8 @@
 ---
 title: "附录 C：MCP 协议规范要点"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/XbVFwyRa4iSinik5RZKcCpOwn3b"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:21+08:00"
 ---
-
-# 附录 C：MCP 协议规范要点
 
 MCP（Model Context Protocol）是 Anthropic 定义的开放协议，标准化 LLM 与外部工具/数据源的通信。
 

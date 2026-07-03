@@ -1,7 +1,7 @@
 ---
 title: "第 3 章：Context Engineering 基础"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/CUjPw8UyeiHBmEkMNticZ7B2nId"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:17+08:00"
 ---
 
 本章介绍 Context Engineering（上下文工程）的核心概念——这些概念直接决定了 claude-mem 为什么这样设计。每个理论点都会用 claude-mem 的实际行为来举例，帮助你建立"设计原则 → 系统实现"的因果关系。
@@ -201,6 +201,20 @@ Main Agent（协调者）
 | 迭代开发，需要跟踪进度 | Structured Note-Taking |
 | 需要大量信息收集后做决策 | Sub-Agent |
 | 跨会话的持久记忆 | 以上三者的组合（即 claude-mem 的做法） |
+
+把这张决策表画成流程，如图 3-1 所示——先判断记忆是否需要跨会话保留，再看单会话内的上下文压力来自哪里：
+
+```mermaid
+flowchart TD
+    S[长任务上下文管理] --> Q0{记忆需要<br/>跨会话保留？}
+    Q0 -->|是| R0["三种策略组合使用<br/>（即 claude-mem 的做法）"]
+    Q0 -->|否，单会话内| Q1{上下文压力<br/>来自哪里？}
+    Q1 -->|长对话接近上下文限制| R1["Compaction<br/>压缩历史消息，保留摘要"]
+    Q1 -->|迭代开发，需要跟踪进度| R2["Structured Note-Taking<br/>进度写入外部文件"]
+    Q1 -->|大量信息收集后才能决策| R3["Sub-Agent<br/>子代理深入探索，返回浓缩结果"]
+```
+
+*图 3-1：长任务三板斧的选择决策流程*
 
 ## 小结
 

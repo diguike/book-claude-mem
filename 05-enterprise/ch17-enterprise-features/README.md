@@ -1,7 +1,7 @@
 ---
 title: "第 17 章：企业级特性设计"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/JMDrwKDImiUyOLkfAvlcNltGnkc"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:09+08:00"
 ---
 
 ## 团队知识共享：Shared Memory Space
@@ -10,21 +10,20 @@ last_synced: "2026-05-05T16:52:35Z"
 
 ### 记忆分层模型
 
+四层记忆的职责划分和知识流动方向如图 17-1 所示：越往上共享范围越大、内容越精炼，下层记忆通过"上升"机制沉淀到上层（规则见下文）。
+
+```mermaid
+graph BT
+    PERS["Personal Memory<br/>可见范围：仅本人<br/>存个人工作习惯、偏好、最近工作记录<br/>产生方式：Observation 管道自动生成"]
+    PROJ["Project Memory<br/>可见范围：项目成员<br/>存项目维度的完整开发历史索引"]
+    TEAM["Team Memory<br/>可见范围：团队内<br/>存模块知识、Bug 模式、gotcha 与 decision"]
+    ORG["Organization Memory<br/>可见范围：全组织<br/>存架构决策、规范约定，条数少、单条价值高"]
+    PERS -->|"上升：被 3+ 成员引用<br/>或类型为 gotcha / decision"| TEAM
+    TEAM -->|"上升：explicit_promotion 手动提名"| ORG
+    PERS -.->|"按项目归属聚合"| PROJ
 ```
-┌─────────────────────────────────────┐
-│  Organization Memory                 │
-│  全组织共享的架构决策、规范约定        │
-├─────────────────────────────────────┤
-│  Team Memory                         │
-│  团队内共享的模块知识、Bug 模式        │
-├─────────────────────────────────────┤
-│  Project Memory                      │
-│  项目维度的开发历史                   │
-├─────────────────────────────────────┤
-│  Personal Memory                     │
-│  个人的工作习惯和偏好                 │
-└─────────────────────────────────────┘
-```
+
+*图 17-1：四层记忆分层模型与知识上升方向*
 
 每层的 Context Injection 策略不同：
 - **Organization Memory**：始终注入（Token 开销小，通常是规范性声明）
@@ -158,6 +157,27 @@ CREATE INDEX audit_log_time_idx ON audit_log (created_at);
 CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at);
 ```
 
+权限校验、脱敏、审计不是三个孤立的功能，它们串在同一条写入链路上。如图 17-2 所示，一次记忆写入从客户端提交到最终落库，要依次通过认证、RBAC 校验、脱敏、租户隔离写入、审计记录五道关卡，任何一道不通过都会中断请求：
+
+```mermaid
+sequenceDiagram
+    participant C as Agent 客户端（Member 角色）
+    participant G as API 网关 POST /v1/observations
+    participant Z as 脱敏模块 sanitize()
+    participant DB as PostgreSQL observations 表
+    participant L as audit_log
+
+    C->>G: 1. 提交 Observation（Bearer Token）
+    G->>G: 2. 解析 userId / orgId，RBAC 校验（Member 只能写 scope=own）
+    G->>Z: 3. 正文逐条匹配 sensitivePatterns
+    Z-->>G: 4. 返回脱敏后文本（凭证已替换为 [REDACTED_CREDENTIAL]）
+    G->>DB: 5. 带 org_id 写入，租户间互不可见
+    G->>L: 6. 记录 action=create、resource_type=observation、metadata
+    G-->>C: 7. 返回创建结果
+```
+
+*图 17-2：一次带脱敏与审计的记忆写入链路*
+
 ## Analytics Dashboard
 
 ### 核心指标
@@ -247,7 +267,7 @@ Rate Limiting 策略：
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 
-下一章将探讨 Agent Memory 的前沿方向：RAD 标准、Agent 间协作、记忆遗忘和多模态记忆。
+下一章将探讨 Agent Memory 的前沿方向：记忆互操作性、Agent 间协作、记忆遗忘和多模态记忆。
 
 ---
 

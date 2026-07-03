@@ -1,7 +1,7 @@
 ---
 title: "第 4 章：系统架构总览"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/SbaJwOHwNijd72km1c6cxjW2n2d"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:21+08:00"
 ---
 
 ## 源码探索路线图：从哪里开始读
@@ -137,7 +137,7 @@ Worker 的端口分配策略：`37700 + (uid % 100)`，确保同一台机器上�
 
 ## 五个生命周期 Hook 的职责划分
 
-从 `hooks.json` 可以看到，claude-mem 注册了 6 个 Hook 事件的监听（Setup、SessionStart、UserPromptSubmit、PreToolUse、PostToolUse、Stop），但核心业务逻辑围绕 5 个阶段展开：
+从 `hooks.json` 可以看到，claude-mem 注册了 6 个 Hook 事件的监听（Setup、SessionStart、UserPromptSubmit、PreToolUse、PostToolUse、Stop），但核心业务逻辑围绕 5 个阶段展开，如图 4-1 所示：
 
 ```mermaid
 sequenceDiagram
@@ -180,6 +180,8 @@ sequenceDiagram
     Worker->>DB: INSERT session_summaries
 ```
 
+*图 4-1：五个生命周期 Hook 在一次会话中的触发时序*
+
 每个阶段的超时设置反映了其性质：
 - Setup（300s）：首次可能需要安装依赖
 - SessionStart（60s）：启动 Worker + 查询上下文
@@ -189,7 +191,31 @@ sequenceDiagram
 
 ## 数据流全链路
 
-追踪一条数据从产生到被使用的完整路径：
+追踪一条数据从产生到被使用的完整路径。以最高频的 PostToolUse 观察为例，从 Hook 触发到最终落库的链路如图 4-2 所示：
+
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code
+    participant CLI as CLI Layer<br/>(hook-command.ts)
+    participant W as Worker Daemon
+    participant SQL as SQLite
+    participant CH as ChromaDB
+
+    CC->>CLI: 1. PostToolUse 触发，stdin 传入 tool_input/tool_response
+    CLI->>W: 2. POST /api/sessions/observations
+    W->>SQL: 3. 原始数据入队 pending_messages
+    W-->>CLI: 4. 入队成功
+    CLI-->>CC: 5. { continue: true }，全程 < 30ms
+    Note over W,CH: 以下为 Worker 后台异步处理
+    W->>W: 6. Claude Agent SDK 压缩为结构化 Observation
+    W->>SQL: 7. content_hash 去重后 INSERT observations
+    W->>CH: 8. 生成 Embedding 并同步
+    W->>SQL: 9. 清除已处理的 pending_messages
+```
+
+*图 4-2：一次 PostToolUse 观察从 Hook 触发到落库的完整链路*
+
+下面按阶段拆开这条链路：
 
 **产生阶段**（当前会话）：
 
@@ -212,9 +238,8 @@ Worker 的 SessionManager 检测到新的 pending message
   → 将 tool 输入/输出序列化为 prompt
   → 发送给 Claude Agent SDK 进行 AI 压缩
   → SDK 返回结构化的 Observation（type / title / narrative / facts）
-  → 计算 content_hash = SHA256(session_id + title + narrative)[:16]
-  → 检查 30 秒窗口内是否有相同 hash（去重）
-  → INSERT INTO observations
+  → 计算 content_hash = SHA-256(memory_session_id \x00 title \x00 narrative) 前 16 位
+  → INSERT INTO observations（ON CONFLICT(memory_session_id, content_hash) DO NOTHING 去重）
   → ChromaSync 生成 Embedding 并同步到 ChromaDB
   → SSE 广播新 Observation 到 Viewer UI
   → 清除 pending_messages 中已处理的记录
@@ -319,8 +344,6 @@ Worker 层：AI 调用失败 → 重试 3 次后放弃（不影响其他会话�
 ```
 
 **记忆是锦上添花，不是生命线。** 系统的可靠性设计围绕这个认知展开。
-
----
 
 ---
 

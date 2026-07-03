@@ -1,7 +1,7 @@
 ---
 title: "第 6 章：Worker Service — 异步处理引擎"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KPeiwyWKwid6c8kC5WOcvX6TnFe"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:31+08:00"
 ---
 
 ## 为什么需要后台 Worker
@@ -151,7 +151,22 @@ claude-mem 维护两种 Session ID，这是理解其内部逻辑的关键：
 
 Claude Code 分配的 `contentSessionId` 在整个会话期间不变，是外部身份标识。但 Worker 的 SDK Agent 可能重启（升级、崩溃恢复），每次重启都会获得新的 `memorySessionId`。
 
-数据库中 `sdk_sessions` 表同时存储两个 ID，通过 `content_session_id` 关联外部会话，通过 `memory_session_id` 关联 AI Agent 的内部状态。
+数据库中 `sdk_sessions` 表同时存储两个 ID，通过 `content_session_id` 关联外部会话，通过 `memory_session_id` 关联 AI Agent 的内部状态。两条轨道的来源、变化时机和汇合点如图 6-1 所示：
+
+```mermaid
+flowchart LR
+    subgraph EXT["外部轨道（稳定）"]
+        CC[Claude Code 会话] -->|Hook 输入携带| CSID["contentSessionId<br/>整个会话不变"]
+    end
+    subgraph INT["内部轨道（可变）"]
+        SDK[SDK Agent 实例] -->|每次启动分配| MSID["memorySessionId<br/>Agent 重启后换新值"]
+        SDK -.->|崩溃 / 升级重启| SDK
+    end
+    CSID -->|content_session_id| DB[("sdk_sessions 表<br/>src/services/sqlite/")]
+    MSID -->|memory_session_id| DB
+```
+
+图 6-1：Session ID 双轨制——contentSessionId 与 memorySessionId 的来源与汇合
 
 ```sql
 -- sdk_sessions 表
@@ -220,46 +235,64 @@ function reapOrphans() {
 
 防止因异常退出导致的僵尸进程累积。
 
-## Graceful Shutdown 七步法
+## Graceful Shutdown：六步顺序关闭
 
-当 Worker 需要关闭时（手动停止、系统关机、SIGTERM），执行严格的七步关闭流程：
+当 Worker 需要关闭时（手动停止、SIGTERM），`performGracefulShutdown()` 按固定顺序依次 await 六个步骤。这个函数位于 `src/services/infrastructure/GracefulShutdown.ts`，全文件只有 75 行：
 
 ```typescript
 // src/services/infrastructure/GracefulShutdown.ts（简化）
-async function performGracefulShutdown(): Promise<void> {
-  // Step 1: 移除 PID 文件（防止新 Hook 连接进来）
-  removePidFile();
-
-  // Step 2: 停止接受新连接
-  httpServer.close();
-
-  // Step 3: 等待活跃请求完成（最多 5 秒）
-  await drainConnections(5000);
-
-  // Step 4: 通知所有活跃 Session 停止处理
-  for (const session of activeSessions) {
-    session.markCompleting();
+export async function performGracefulShutdown(config: GracefulShutdownConfig): Promise<void> {
+  // Step 1: 关闭 HTTP server（强制断开现有连接 + 停止监听）
+  if (config.server) {
+    await closeHttpServer(config.server);
   }
 
-  // Step 5: 等待 pending messages 处理完毕（最多 10 秒）
-  await drainPendingMessages(10000);
+  // Step 2: 关闭所有活跃 Session（及其 SDK Agent）
+  await config.sessionManager.shutdownAll();
 
-  // Step 6: 关闭 MCP 连接和 ChromaDB
-  await chromaMcp.disconnect();
+  // Step 3: 关闭 MCP client（若存在）
+  if (config.mcpClient) {
+    await config.mcpClient.close();
+  }
 
-  // Step 7: 关闭 SQLite 数据库
-  database.close();
+  // Step 4: 停止 ChromaDB 的 MCP 连接（若存在）
+  if (config.chromaMcpManager) {
+    await config.chromaMcpManager.stop();
+  }
 
-  // 如果以上步骤超时，force kill 子进程
-  killAllChildren();
+  // Step 5: 关闭 SQLite 数据库（若存在）
+  if (config.dbManager) {
+    await config.dbManager.close();
+  }
+
+  // Step 6: 停止子进程 supervisor
+  await getSupervisor().stop();
 }
 ```
 
-为什么需要这么细致的关闭流程？因为粗暴的 `process.exit()` 可能导致：
-- 正在写入的 SQLite 事务损坏
-- pending messages 丢失
-- ChromaDB 同步中断导致数据不一致
-- 僵尸子进程残留
+第一步的 `closeHttpServer()` 内部做了两件事：先调用 `server.closeAllConnections()` 强制断开所有现存连接，再调用 `server.close()` 停止监听。唯一的平台特判是 Windows——在这两个调用前后各等待 500ms，给操作系统留出端口清理的时间；其他平台没有任何等待。
+
+整个流程如图 6-2 所示：
+
+```mermaid
+flowchart TB
+    SIG[收到关闭信号<br/>performGracefulShutdown] --> S1["Step 1: 关闭 HTTP server<br/>server.closeAllConnections + server.close<br/>（仅 Windows 前后各等 500ms）"]
+    S1 --> S2["Step 2: 关闭活跃 Session<br/>sessionManager.shutdownAll()"]
+    S2 --> S3["Step 3: 关闭 MCP client<br/>mcpClient.close()（若存在）"]
+    S3 --> S4["Step 4: 停止 ChromaDB 连接<br/>chromaMcpManager.stop()（若存在）"]
+    S4 --> S5["Step 5: 关闭 SQLite<br/>dbManager.close()（若存在）"]
+    S5 --> S6["Step 6: 停止子进程管理器<br/>getSupervisor().stop()"]
+    S6 --> DONE[Worker shutdown complete]
+```
+
+图 6-2：Worker 优雅关闭的六步顺序流程（src/services/infrastructure/GracefulShutdown.ts）
+
+关闭顺序的设计逻辑是"从外到内"：先切断入口（HTTP server），保证不再有新请求进来；然后关业务层（Session 和 SDK Agent），让正在进行的 AI 压缩收尾；再断开外部连接（MCP client、ChromaDB）；最后才关存储（SQLite）和子进程管理器。如果顺序反过来——比如先关数据库——尚未结束的 Session 在收尾时的写入就会直接失败。粗暴的 `process.exit()` 之所以危险，也是同一个原因：正在写入的 SQLite 事务可能损坏，ChromaDB 同步会中断，SDK 子进程会变成孤儿。
+
+另外两点和直觉可能不同，读源码时值得对照确认：
+
+- **没有超时兜底**。每一步都是直接 `await`，任何一步挂起，整个关闭流程就卡在那里，不会跳到下一步，最终只能靠外层的强制杀进程收场。
+- **没有 PID 文件清理步骤**。关闭流程不负责删除 `~/.claude-mem/worker.pid`，stale PID 文件由下次启动时的检测逻辑处理（见前文"PID 文件"一节）。
 
 ---
 
@@ -267,7 +300,7 @@ async function performGracefulShutdown(): Promise<void> {
 
 1. Worker 单实例能支持多少并发 session？瓶颈在 CPU（AI 压缩）、内存（队列堆积）还是 I/O（SQLite 写入）？设计一个压测方案来验证。
 2. 如果 Worker 进程意外崩溃，队列中未处理的消息会丢失吗？如何设计一个"崩溃恢复"机制？
-3. 当前的 graceful shutdown 流程是串行的（7 步依次执行）。如果某一步超时卡住，后续步骤都无法执行——如何改进？
+3. 当前的 graceful shutdown 流程是串行的（六步依次 await），且没有任何超时兜底。如果某一步卡住，后续步骤都无法执行——如何改进？
 
 ---
 

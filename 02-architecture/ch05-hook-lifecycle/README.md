@@ -1,7 +1,7 @@
 ---
 title: "第 5 章：Hook 驱动的生命周期"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/GLKZw8Mu6ic0HBk44tWcawDin3g"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:25+08:00"
 ---
 
 ## Claude Code Hook 系统原理
@@ -99,7 +99,28 @@ Setup Hook 在每次 Claude Code 启动时执行，是最先运行的 Hook。cla
 
 ## SessionStart Hook：上下文注入的时机选择
 
-SessionStart 在 Claude Code 每次新会话开始时触发（包括 startup、/clear、/compact 三种场景）。claude-mem 注册了两个顺序执行的 Hook：
+SessionStart 在 Claude Code 每次新会话开始时触发（包括 startup、/clear、/compact 三种场景）。claude-mem 在 `plugin/hooks/hooks.json` 中注册了两个顺序执行的 Hook：先确保 Worker 进程就绪，再向它请求上下文。执行顺序如图 5-1 所示。
+
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code
+    participant H1 as Hook 1 脚本<br/>(worker-service.cjs start)
+    participant H2 as Hook 2 脚本<br/>(hook claude-code context)
+    participant W as Worker (HTTP)
+
+    CC->>H1: 1. SessionStart 事件（stdin JSON）
+    H1->>W: 2. 探测 Worker 是否在运行
+    alt Worker 未运行
+        H1->>W: 启动 Worker 进程
+    end
+    H1-->>CC: 3. exit 0
+    CC->>H2: 4. SessionStart 事件（stdin JSON）
+    H2->>W: 5. GET /api/context/inject?projects=...
+    W-->>H2: 6. Progressive Disclosure 索引
+    H2-->>CC: 7. hookSpecificOutput.additionalContext
+```
+
+图 5-1：SessionStart 阶段两个 Hook 的执行顺序（Hook 2 的处理逻辑在 `src/cli/handlers/context.ts`）
 
 ### Hook 1：启动 Worker
 
@@ -150,21 +171,38 @@ export const contextHandler: EventHandler = {
 ```markdown
 # claude-mem status
 
-**Legend:** 🎯 session-request | 🔴 gotcha | 🟡 problem-solution | 🔵 how-it-works | 🟢 what-changed | 🟣 discovery | 🟤 decision | ⚖️ trade-off
+**Legend:** 🎯 session | 🔴 bugfix | 🟣 feature | 🔄 refactor | ✅ change | 🔵 discovery | ⚖️ decision
 
 ### May 4, 2026
 
 **General**
 | ID | Time | T | Title | Tokens |
 |----|------|---|-------|--------|
-| #1234 | 2:15 PM | 🟤 | 选用 pgvector 做向量搜索 | ~180 |
-| #1235 | 2:30 PM | 🟡 | 修复连接池泄漏 | ~120 |
+| #1234 | 2:15 PM | ⚖️ | 选用 pgvector 做向量搜索 | ~180 |
+| #1235 | 2:30 PM | 🔴 | 修复连接池泄漏 | ~120 |
 
 **src/services/auth.ts**
 | ID | Time | T | Title | Tokens |
 |----|------|---|-------|--------|
-| #1236 | 3:00 PM | 🟢 | JWT 验证改为异步 | ~95 |
+| #1236 | 3:00 PM | ✅ | JWT 验证改为异步 | ~95 |
 ```
+
+表格中 `T` 列的图标标注 Observation 的 **type**（类型），完整映射定义在 `src/cli/claude-md-commands.ts` 的 `TYPE_ICONS`：
+
+| Type | 图标 | 含义 |
+|------|------|------|
+| bugfix | 🔴 | 修复缺陷 |
+| feature | 🟣 | 新功能 |
+| refactor | 🔄 | 重构 |
+| change | ✅ | 一般变更 |
+| discovery | 🔵 | 探索发现 |
+| decision | ⚖️ | 技术决策 |
+| session | 🎯 | 会话记录 |
+| prompt | 💬 | 用户提示 |
+
+未匹配的 type 一律回退为 📝（见同文件的 `getTypeIcon`）。
+
+容易和 type 混淆的是 **concept** 标签。它是另一个独立维度，没有图标，用于检索时的语义过滤（Worker 的 `/api/search/by-concept` 接口按它筛选）。取值定义在 `plugin/modes/code.json` 的 `observation_concepts`：how-it-works、why-it-exists、what-changed、problem-solution、gotcha、pattern、trade-off。一条 Observation 有一个 type 和若干 concept——type 回答"这条记录是什么性质的动作"，concept 回答"它承载了哪类知识"。
 
 关键设计：
 - 每条记录只有标题级信息（~15 Token），50 条总共约 750 Token
@@ -260,12 +298,25 @@ export const observationHandler: EventHandler = {
 
 整个 Handler 只做一件事：**把数据发到 Worker**。不解析、不压缩、不存库——这些全部由 Worker 异步完成。
 
-这是经典的"Fire-and-Forget"模式：
+这是经典的"Fire-and-Forget"模式，数据流如图 5-2 所示：Hook 侧只负责转发，耗时不到 30ms；耗时 5-30s 的解析、AI 压缩、存库全部发生在 Hook 返回之后，由 Worker 异步完成。
 
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code
+    participant H as PostToolUse Hook<br/>(src/cli/handlers/observation.ts)
+    participant W as Worker HTTP API
+    participant Q as 队列 + AI 压缩<br/>(src/services/worker-service.ts)
+
+    CC->>H: 1. 工具调用完成（stdin JSON）
+    H->>W: 2. POST /api/sessions/observations
+    W-->>H: 3. 确认入队（不等待处理）
+    H-->>CC: 4. continue: true（< 30ms，会话不阻塞）
+    Note over W,Q: 以下发生在 Hook 返回之后
+    W->>Q: 5. observation 入队
+    Q->>Q: 6. 按序处理 → AI 压缩 → 写入 SQLite（5-30s）
 ```
-Hook（快）: 读 stdin → POST 到 Worker → 返回 success（< 30ms）
-Worker（慢）: 收到 POST → 入队 → 按序处理 → AI 压缩 → 存库（5-30s）
-```
+
+图 5-2：PostToolUse 的 Fire-and-Forget 数据流（Hook 立即返回，Worker 异步处理）
 
 为什么 PostToolUse 的 timeout 设为 120s？因为 Worker 可能暂时过载（在处理大量排队的 observations），HTTP 请求需要等待 Worker 接收完成。但 Worker 内部的实际处理是异步的，不在这 120s 窗口内。
 
@@ -376,6 +427,8 @@ Worker 通过心跳机制检测 session 是否仍然活跃。当 session 超过�
 | PostToolUse | 8ms | 15ms | 30ms | HTTP 请求 |
 | Stop (summarize) | 5ms | 10ms | 20ms | HTTP 请求（入队即返回） |
 
+数据来源：claude-mem 官方文档 `docs/public/hooks-architecture.mdx`。
+
 所有 Hook 的 p99 都在 250ms 以内。用户在正常使用 Claude Code 时完全感知不到 claude-mem 的存在。
 
 ### 性能优化手段
@@ -406,8 +459,6 @@ Hook 命令不直接执行 TypeScript 文件，而是通过 `bun-runner.js` 桥�
 **4. Worker 连接复用**
 
 `executeWithWorkerFallback` 内部使用 fetch（Node.js 原生），自动复用 TCP 连接。连续的 Hook 调用不需要反复建立连接。
-
----
 
 ---
 

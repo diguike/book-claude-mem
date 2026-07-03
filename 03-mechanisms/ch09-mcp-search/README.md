@@ -1,7 +1,7 @@
 ---
 title: "第 9 章：MCP 搜索架构"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Q4jkw0bO4iqY2YknDyMcpHx4ntg"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:42+08:00"
 ---
 
 ## MCP (Model Context Protocol) 入门
@@ -37,11 +37,29 @@ MCP Server 是一个独立进程，由 Claude Code 启动和管理。它的职�
 7. Claude 基于结果决定下一步
 ```
 
-## 从 9 个工具到 4 个工具的演进
+这条链路如图 9-1 所示：
 
-claude-mem 的 MCP 工具经历了一次重要的精简：
+```mermaid
+sequenceDiagram
+    participant C as Claude (MCP Client)
+    participant M as MCP Server
+    participant W as Worker Service
+    participant D as SQLite FTS5
+    C->>M: 1. tools/call: search(query="auth bug")
+    M->>W: 2. GET /api/search?query=auth%20bug
+    W->>D: 3. FTS5 MATCH 查询（BM25 排序）
+    D-->>W: 4. 命中的 Observation 行
+    W-->>M: 5. 裁剪为索引表格（每条约 50-100 Token）
+    M-->>C: 6. 包装为 MCP content 响应
+```
 
-### v5.x 时代：9 个工具
+图 9-1：一次 search 工具调用的完整链路。MCP Server 不做任何数据处理，只负责协议翻译；结果裁剪发生在 Worker 侧，返回给 Claude 的是轻量索引而非全文。
+
+## 从 9 个工具到 4 个核心搜索工具的演进
+
+claude-mem 的 MCP 搜索工具经历了一次重要的精简：
+
+### v5.x 时代：9 个搜索工具
 
 ```
 search_observations  — 全文搜索
@@ -61,7 +79,7 @@ help                — API 文档
 - Claude 经常不知道该用哪个工具
 - 没有引导正确工作流的机制
 
-### v12.x：4 个工具
+### v12.x：4 个核心搜索工具
 
 ```
 __IMPORTANT         — 工作流说明（始终可见）
@@ -75,6 +93,15 @@ get_observations    — 批量获取详情
 - 工具定义 Token 消耗大幅降低
 - 工作流不言自明：search → timeline → get_observations
 - `additionalProperties: true` 让参数 Schema 极简
+
+### 4 个之外：MCP Server 上的另外两个工具族
+
+需要说明的是，"4 个"指的是核心搜索工具。截至 v12.6.2，`src/servers/mcp-server.ts` 实际注册了 13 个工具，除上述 4 个之外还有两个独立的工具族：
+
+- **smart-explore 代码导航工具族（3 个）**：`smart_search`、`smart_unfold`、`smart_outline`。它们面向代码库的结构化探索（搜索符号、按需展开代码块、查看文件大纲），与记忆搜索是两条不同的数据链路
+- **Knowledge Agent corpus 工具族（6 个）**：`build_corpus`、`list_corpora`、`prime_corpus`、`query_corpus`、`rebuild_corpus`、`reprime_corpus`。它们用于从文档集合构建可查询的知识库，第 11 章展开分析
+
+本章聚焦 4 个核心搜索工具，因为它们承载了记忆检索的主流程，也是"9 → 4"精简这场设计演进的主角。
 
 ## `__IMPORTANT` 工具：用工具定义引导行为
 
@@ -197,7 +224,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 const server = new Server({ name: 'claude-mem-search', version: '1.0.0' });
 
-// 注册工具列表
+// 注册工具列表（此处只展示 4 个核心搜索工具，
+// 完整列表还包括 smart-explore 和 corpus 两个工具族）
 server.setRequestHandler('tools/list', async () => ({
   tools: [
     { name: '__IMPORTANT', description: '...', inputSchema: {...} },
@@ -230,21 +258,18 @@ await server.connect(transport);
 
 全文搜索面临的安全风险：用户（或 Agent）构造恶意查询可能导致 FTS5 解析错误或意外行为。
 
-claude-mem 的防护策略：
+claude-mem 的防护策略是对 FTS5 特殊字符做转义（`src/services/sqlite/SessionSearch.ts:269`）：
 
 ```typescript
-// 查询前转义特殊字符
-function escapeFTS5Query(query: string): string {
-  return query.replace(/"/g, '""');
-}
+// src/services/sqlite/SessionSearch.ts:269（简化）
+const escapedQuery = '"' + query.replace(/"/g, '""') + '"';
 ```
 
-测试覆盖了 332 种攻击向量：
-- 特殊字符：`'; DROP TABLE observations; --`
-- 引号逃逸：`"nested "quotes" here"`
-- FTS5 操作符：`NOT * OR AND NEAR`
-- Unicode 边界：零宽字符、RTL 标记
-- 超长查询：超出 FTS5 token 限制
+做法是把整个查询包在双引号里当作短语字面量，并把内部的双引号翻倍。这一步挡住了几类典型问题：
+
+- FTS5 操作符注入：`NOT`、`OR`、`AND`、`NEAR`、`*` 被当作普通文本而不是查询语法
+- 引号逃逸：`"nested "quotes" here"` 无法提前闭合字符串
+- 语法崩溃：未配对引号、特殊符号导致的 FTS5 解析错误
 
 在 claude-mem 的场景中，查询来源是 Claude（通过 MCP 工具调用），不是直接的用户输入。但防护仍然必要——Claude 可能基于用户 prompt 构造查询，而用户 prompt 中可能包含特殊字符。
 
@@ -252,8 +277,8 @@ function escapeFTS5Query(query: string): string {
 
 **思考题**
 
-1. 如果要为 MCP Server 添加第 5 个工具，你认为应该是什么功能？给出工具名、参数设计和使用场景，并论证为什么当前 4 个工具无法覆盖。
-2. FTS5 查询的安全防护覆盖了 332 种攻击向量，但这些都是针对"文本注入"的。如果攻击者通过精心构造的文件名触发 Hook，进而影响搜索索引，该如何防护？
+1. 如果要为核心搜索工具族添加第 5 个工具，你认为应该是什么功能？给出工具名、参数设计和使用场景，并论证为什么当前 4 个工具无法覆盖。
+2. FTS5 查询的转义防护针对的是"文本注入"。如果攻击者通过精心构造的文件名触发 Hook，进而影响搜索索引，该如何防护？
 3. 当前搜索结果的排序基于 FTS5 内置的 BM25 算法。如果要加入"时间衰减"因子（越新的 Observation 排名越高），你会怎么实现？
 
 ---

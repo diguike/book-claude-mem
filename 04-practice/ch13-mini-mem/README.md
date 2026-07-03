@@ -1,7 +1,7 @@
 ---
 title: "第 13 章：实现简版 Memory Plugin（mini-mem）"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/BstDwVMp4i9bwbkdGa9c3JYPnrf"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:54+08:00"
 ---
 
 ## 项目规划：MVP 功能范围
@@ -31,8 +31,7 @@ examples/ch13-mini-mem/
 ├── src/
 │   ├── hooks/
 │   │   ├── context-hook.ts      # SessionStart：注入索引
-│   │   ├── save-hook.ts         # PostToolUse：保存观察
-│   │   └── cleanup-hook.ts      # SessionEnd：清理
+│   │   └── save-hook.ts         # PostToolUse：保存观察
 │   ├── mcp/
 │   │   └── server.ts            # MCP Server
 │   ├── db/
@@ -41,17 +40,37 @@ examples/ch13-mini-mem/
 │   └── utils/
 │       ├── stdin.ts             # 读取 stdin
 │       └── title-extractor.ts   # 从 Tool Usage 提取标题
-├── plugin/
-│   ├── .claude-plugin/
-│   │   └── plugin.json
-│   ├── hooks/
-│   │   └── hooks.json
-│   └── .mcp.json
-└── scripts/
-    └── install.sh               # 安装脚本
+└── plugin/
+    ├── .claude-plugin/
+    │   └── plugin.json
+    ├── hooks/
+    │   └── hooks.json
+    └── .mcp.json
 ```
 
 ## Hook Layer
+
+先看保存路径的全貌。Claude Code 每完成一次工具调用，就按 `plugin/hooks/hooks.json` 中的 PostToolUse 配置拉起 `save-hook.js`，由这个 Hook 进程同步完成解析、提取和落库——本章不引入 Worker 守护进程，写库就在 Hook 自己的进程里发生。完整链路如图 13-1 所示，本节接下来的小节会逐个实现图中的模块。
+
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code
+    participant SH as save-hook.ts
+    participant TE as title-extractor.ts
+    participant ST as store.ts (ObservationStore)
+    participant DB as SQLite (~/.mini-mem/mini-mem.db)
+
+    CC->>SH: 1. PostToolUse 触发（hooks.json）<br/>stdin 传入 JSON：tool_name / tool_input / cwd
+    SH->>SH: 2. readJsonFromStdin() 解析输入（stdin.ts）
+    SH->>TE: 3. extractTitle() / categorize() / extractFiles()
+    TE-->>SH: 4. 标题、类型、文件列表
+    SH->>ST: 5. insertObservation()
+    ST->>DB: 6. INSERT INTO observations<br/>（触发器 obs_fts_insert 同步写 observations_fts）
+    DB-->>ST: 7. lastInsertRowid
+    SH-->>CC: 8. stdout 返回 {continue: true, suppressOutput: true}
+```
+
+图 13-1：mini-mem 保存路径数据流。Hook 进程快进快出，任何一步出错都吞掉异常并返回 `continue: true`，绝不阻塞 Claude Code。
 
 ### 读取 stdin（通用工具）
 
@@ -320,6 +339,30 @@ export class ObservationStore {
 ```
 
 ## MCP Search 实现
+
+查询路径由 `plugin/.mcp.json` 注册的 MCP Server（`src/mcp/server.ts`）承担，走 stdio transport。它对 Claude Code 暴露两个工具：`search` 返回只含 ID 和标题的紧凑索引表，`get_observations` 再按 ID 取完整详情——两步调用正是 Progressive Disclosure 的落地形式。整个交互如图 13-2 所示。
+
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code (MCP Client)
+    participant MS as server.ts (MCP Server)
+    participant ST as store.ts (ObservationStore)
+    participant DB as SQLite (~/.mini-mem/mini-mem.db)
+
+    CC->>MS: 1. tools/call: search(query, limit)
+    MS->>ST: 2. store.search()
+    ST->>DB: 3. observations_fts MATCH ?<br/>JOIN observations，按 rank 排序
+    DB-->>ST: 4. 命中记录
+    ST-->>MS: 5. 结果数组
+    MS-->>CC: 6. 紧凑索引表（ID / Type / Title）
+    CC->>MS: 7. tools/call: get_observations(ids)
+    MS->>ST: 8. store.getByIds()
+    ST->>DB: 9. SELECT ... WHERE id IN (...)
+    DB-->>ST: 10. 完整记录
+    MS-->>CC: 11. Observation 详情（narrative + files）
+```
+
+图 13-2：mini-mem 查询路径数据流。第 6 步只回传索引，Claude 判断哪些条目相关后才在第 7 步取详情，避免一次性把全文灌进上下文。
 
 ```typescript
 // src/mcp/server.ts

@@ -1,7 +1,7 @@
 ---
 title: "第 7 章：存储层设计"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/L3xQwJNuMiOUxskqnLjc31Jvnvg"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:31:35+08:00"
 ---
 
 ## SQLite 数据模型：6 张核心表
@@ -102,6 +102,57 @@ CREATE TABLE observation_feedback (
 );
 ```
 
+6 张表的外键关系如图 7-1 所示：sdk_sessions 是所有数据的锚点，observations 和 session_summaries 通过 memory_session_id 挂在它下面，user_prompts 和 pending_messages 分别通过 content_session_id 和 session_db_id 关联；observation_feedback 则挂在 observations 下面，记录每条记忆被使用的信号。注意 sdk_sessions 有两个会话 ID——content_session_id 是 Claude Code 分配的，memory_session_id 是 SDK Agent 的——不同的表按各自的语境选用其中一个做外键。
+
+```mermaid
+erDiagram
+    sdk_sessions ||--o{ observations : "memory_session_id"
+    sdk_sessions ||--o{ session_summaries : "memory_session_id"
+    sdk_sessions ||--o{ user_prompts : "content_session_id"
+    sdk_sessions ||--o{ pending_messages : "session_db_id → id"
+    observations ||--o{ observation_feedback : "observation_id"
+
+    sdk_sessions {
+        INTEGER id PK
+        TEXT content_session_id UK
+        TEXT memory_session_id UK
+        TEXT project
+        TEXT status
+    }
+    observations {
+        INTEGER id PK
+        TEXT memory_session_id FK
+        TEXT type
+        TEXT content_hash
+        INTEGER created_at_epoch
+    }
+    session_summaries {
+        INTEGER id PK
+        TEXT memory_session_id FK
+        TEXT request
+        TEXT completed
+    }
+    user_prompts {
+        INTEGER id PK
+        TEXT content_session_id FK
+        INTEGER prompt_number
+        TEXT prompt_text
+    }
+    pending_messages {
+        INTEGER id PK
+        INTEGER session_db_id FK
+        TEXT message_type
+        TEXT status
+    }
+    observation_feedback {
+        INTEGER id PK
+        INTEGER observation_id FK
+        TEXT signal_type
+    }
+```
+
+图 7-1：claude-mem 数据库表关系（字段与外键以 src/services/sqlite/schema.sql 为准，每表只列关键字段）
+
 ## FTS5 全文搜索
 
 SQLite 的 FTS5 扩展为 claude-mem 提供了高性能的全文搜索能力，无需外部搜索引擎。
@@ -161,16 +212,16 @@ FTS5 的 MATCH 语法支持：
 
 ### 注入防护
 
-FTS5 的 MATCH 语法对特殊字符敏感。claude-mem 在查询前进行转义：
+FTS5 的 MATCH 语法对特殊字符敏感：一个未闭合的双引号、一个裸的 `AND`，都可能让查询直接报语法错误，甚至改变查询语义。claude-mem 的处理方式很直接（src/services/sqlite/SessionSearch.ts:269）：
 
 ```typescript
-function escapeFTS5Query(query: string): string {
-  // 双引号转义
-  return query.replace(/"/g, '""');
-}
+// 双引号翻倍转义，再把整个查询包成一个短语
+const escapedQuery = '"' + query.replace(/"/g, '""') + '"';
 ```
 
-源码中有 332 个注入测试用例覆盖各种攻击向量：特殊字符、SQL 关键字、引号逃逸、布尔操作符注入等。
+两步各有作用：`replace(/"/g, '""')` 把用户输入里的双引号翻倍，防止提前闭合短语；外层再包一对双引号，把整个查询变成 FTS5 的短语匹配。副作用是用户输入中的 `AND`、`OR`、`*` 等操作符会被当作普通文本——上一节列的高级语法只对内部构造的查询开放，不暴露给原始用户输入。这是一个典型的取舍：牺牲查询表达力，换取"任意输入都不会炸"的确定性。
+
+如果你自己实现搜索层，建议至少针对这几类输入写测试：引号逃逸（`"; DROP TABLE`、未闭合引号）、布尔操作符注入（`a AND b NOT c`）、超长查询（几十 KB 的输入）。这些是 FTS5 查询层最常见的翻车点。
 
 ## WAL 模式与并发读写
 
@@ -269,41 +320,50 @@ async function hybridSearch(query: string, options: SearchOptions): Promise<Sear
 
 通过混合搜索，用户无论使用精确术语还是模糊描述都能找到相关记忆。
 
-## Deduplication：内容哈希去重的 30 秒窗口
+## Deduplication：数据库层的内容哈希去重
 
-在高频操作时（比如连续保存文件），PostToolUse Hook 可能在短时间内发送多条近似的观察。AI 压缩后可能产生相同的 Observation。claude-mem 通过 content_hash 去重：
+在高频操作时（比如连续保存文件），PostToolUse Hook 可能在短时间内发送多条近似的观察，AI 压缩后可能产生内容完全相同的 Observation。claude-mem 的去重不在应用层做任何判断，而是直接交给数据库：observations 表上有一个 `UNIQUE(memory_session_id, content_hash)` 约束（schema.sql，见表定义末行），插入时用 `ON CONFLICT DO NOTHING` 静默吸收重复（src/services/sqlite/transactions.ts:38、145）：
+
+```sql
+INSERT INTO observations
+(memory_session_id, project, type, title, subtitle, facts, narrative, concepts,
+ files_read, files_modified, prompt_number, discovery_tokens, agent_type, agent_id,
+ content_hash, created_at, created_at_epoch)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(memory_session_id, content_hash) DO NOTHING
+RETURNING id
+```
+
+content_hash 的计算在 src/services/sqlite/observations/store.ts:8：取 memory_session_id、title、narrative 三个字段，用 `\x00` 拼接后做 SHA-256，截取前 16 个十六进制字符。
 
 ```typescript
-// 去重逻辑
-function computeContentHash(sessionId: string, title: string, narrative: string): string {
-  const input = `${sessionId}${title}${narrative}`;
-  return crypto.createHash('sha256').update(input).digest('hex').slice(0, 16);
-}
-
-function shouldInsert(hash: string, now: number): boolean {
-  const existing = db.query(
-    'SELECT created_at_epoch FROM observations WHERE content_hash = ? ORDER BY created_at_epoch DESC LIMIT 1'
-  ).get(hash);
-
-  if (!existing) return true;
-
-  // 30 秒窗口内的重复内容不重复插入
-  const elapsed = now - existing.created_at_epoch;
-  return elapsed > 30;
+export function computeObservationContentHash(
+  memorySessionId: string,
+  title: string | null,
+  narrative: string | null
+): string {
+  return createHash('sha256')
+    .update([memorySessionId || '', title || '', narrative || ''].join('\x00'))
+    .digest('hex')
+    .slice(0, 16);
 }
 ```
 
-为什么是 30 秒？
-- 太短（如 5 秒）：可能漏掉真正的重复（AI 处理延迟可能超过 5 秒）
-- 太长（如 5 分钟）：可能误判正常的重复操作（比如用户确实在 2 分钟后做了相同的修改）
-- 30 秒是基于"AI 压缩单条 Observation 通常 5-30 秒"这个经验值选取的
+注意这个约束的两个特点。第一，它是永久性的，没有时间窗口：同一个 memory session 内，相同标题和叙述的 Observation 无论隔多久重来一次，都只会保留第一条。第二，去重范围以 memory_session_id 为界：换一个会话，同样的内容可以再次写入——因为哈希输入里包含了 session ID，跨会话的"相同发现"被视为独立记忆。
+
+schema.sql 头部的注释交代了这个设计的来历：`UNIQUE(memory_session_id, content_hash) — replaces the legacy dedup window`。也就是说，claude-mem 早期版本确实用过应用层的去重窗口，后来换成了数据库约束。这个演进值得多看一眼，因为它是"应用层逻辑 vs 数据库约束"这个经典取舍的实例：
+
+- **应用层时间窗口**：先查再插，两步之间存在竞态——两个并发写入者同时查到"不存在"，就会各插一条。要堵住竞态就得加锁或串行化，代码越写越多。窗口阈值本身也是一个需要维护、需要解释的魔法数字。
+- **数据库唯一约束**：去重规则声明在 schema 里，由 SQLite 在插入时原子地强制执行，天然并发安全。代码里没有任何判断分支，`DO NOTHING` 一行解决。代价是灵活性：想改成"允许一小时后重复"这类带时间维度的策略，约束就表达不了。
+
+claude-mem 的场景里，"同一会话内完全相同的记忆写两次"没有任何价值，去重规则不需要时间维度，所以数据库约束是更简单也更可靠的选择。当你发现自己在应用层写"先查询、再决定是否插入"的代码时，先问一句：这个规则能不能用一个 UNIQUE 约束表达？能，就让数据库来做。
 
 ---
 
 **思考题**
 
 1. 如果 Observation 量达到 100 万条，SQLite 还够用吗？FTS5 索引的大小和查询延迟会如何变化？设计一个基准测试来评估。
-2. 当前的去重窗口是 30 秒。如果用户在做"撤销-重做"操作（间隔可能 1-2 分钟），这个窗口够大吗？如何设计一个自适应的去重策略？
+2. 当前的去重约束以 memory_session_id 为界，跨会话的相同内容会重复存储。如果想做跨会话去重（比如用户每天都在修同一个 bug，产生几十条几乎一样的 Observation），UNIQUE 约束还够用吗？需要在哪一层引入什么机制？
 3. ChromaDB 向量同步是异步的，这意味着刚写入的 Observation 可能还没有向量索引。这对搜索结果有什么影响？如何缓解？
 
 ---

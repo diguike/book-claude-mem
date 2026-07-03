@@ -1,10 +1,8 @@
 ---
 title: "附录 D：SQLite FTS5 语法速查"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/UMVTw2zvVidw9ukUJVmcIrVunqc"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:24+08:00"
 ---
-
-# 附录 D：SQLite FTS5 语法速查
 
 ## 建表
 

@@ -1,10 +1,8 @@
 ---
 title: "附录 A：claude-mem 源码导航图"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Izgzwz9gjitMULkwVQlctduTn0d"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-07-03T18:32:17+08:00"
 ---
-
-# 附录 A：claude-mem 源码导航图
 
 基于 v12.6.2，按功能模块组织的文件路径速查。
 
