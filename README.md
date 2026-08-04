@@ -42,6 +42,8 @@ npm run test:save    # 模拟工具调用
 npm run test:context # 查看索引输出
 ```
 
+需要模型 API 的章节示例读 `.env`（各目录有 `.env.example`），国内可用[阿里云百炼](https://www.aliyun.com/benefit/ai/aistar?userCode=okjhlpr5)的 OpenAI 兼容端点。
+
 ## 目录
 
 - [前言](00-preface/README.md)
