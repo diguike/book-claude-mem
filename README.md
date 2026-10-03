@@ -12,6 +12,9 @@ last_synced: ""
 
 > **作者**：递归客 | **社区**：[inferloop.dev](https://inferloop.dev) | **协议**：CC BY-NC-SA 4.0
 
+> **For English readers**  
+> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (v12.6.2): hooks, the worker service, storage, search, and building a mini version from scratch. It is written in Chinese; browser translation works fine for reading it, and all the code is in this repository. New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
+
 基于 claude-mem 开源项目的深度源码解析，面向前端/全栈工程师的 Agent Memory 系统设计与实现指南。
 
 ## 目标读者

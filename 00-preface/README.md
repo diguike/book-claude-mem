@@ -8,6 +8,9 @@ last_synced: "2026-07-03T18:30:53+08:00"
 > 源码仓库 · [github.com/diguike/book-claude-mem](https://github.com/diguike/book-claude-mem)  
 > 在线阅读 · [inferloop.dev/claude-mem](https://inferloop.dev/claude-mem)
 
+> **For English readers**  
+> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (v12.6.2): hooks, the worker service, storage, search, and building a mini version from scratch. It is written in Chinese; browser translation works fine for reading it, and the code is on [GitHub](https://github.com/diguike/book-claude-mem). New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
+
 ## 为什么写这本书
 
 2025 年下半年，Agent 开发从"能跑通 Demo"进入了"能上生产"的阶段。越来越多工程师开始构建真正有用的 AI Agent，很快撞上同一堵墙：Agent 没有记忆。
