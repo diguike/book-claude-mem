@@ -4,12 +4,10 @@
   "type": "module",
   "description": "Knowledge Agent Build→Prime→Query 流程 Demo",
   "scripts": {
-    "demo": "tsx src/index.ts",
-    "demo:build": "tsx src/build-corpus.ts",
-    "demo:query": "tsx src/query-corpus.ts"
+    "demo": "tsx src/index.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

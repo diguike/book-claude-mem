@@ -97,7 +97,7 @@ function initDb(): Database.Database {
       ],
     },
     {
-      type: 'how-it-works',
+      type: 'discovery',
       title: 'MCP Server 工具调用流程',
       narrative: 'Claude 通过 MCP 协议调用 search 工具时，Server 先做 FTS5 全文搜索，再按 BM25 分数排序，返回前 N 条 Observation 的 ID 和标题。',
       facts: [
@@ -172,7 +172,7 @@ function initDb(): Database.Database {
       ],
     },
     {
-      type: 'how-it-works',
+      type: 'discovery',
       title: 'Knowledge Agent Build 阶段流程',
       narrative: 'build_corpus 命令读取指定项目的全部 Observation，分批发给 Claude Agent SDK 进行主题聚类和摘要，生成结构化的 Corpus 文档。',
       facts: [
@@ -226,7 +226,7 @@ function initDb(): Database.Database {
       ],
     },
     {
-      type: 'how-it-works',
+      type: 'discovery',
       title: 'claude-mem 插件安装原理',
       narrative: 'install-plugin 脚本将 plugin/ 目录软链接到 ~/.claude/plugins/ 下，Claude Code 启动时扫描该目录并加载 plugin.json。Hook 和 MCP 配置从 plugin/ 目录读取。',
       facts: [
@@ -288,19 +288,59 @@ function estimateTokens(text: string): number {
   return Math.ceil(chineseChars / 1.5 + otherChars / 4);
 }
 
-/** Layer 1：只输出索引表（ID + 类型图标 + 标题） */
-function layer1Index(db: Database.Database): string {
-  const typeIcon: Record<string, string> = {
-    bugfix: '[fix]', change: '[chg]', decision: '[dec]',
-    discovery: '[disc]', 'how-it-works': '[how]',
-  };
+/**
+ * Layer 0：工作状态。只追加的条目表，读取时按时间重放、每个键取最新值
+ * （claude-mem 的 work_state_entries + foldWorkStateList）
+ */
+interface WorkStateEntry { list: string; fields: Record<string, string | null> }
+const workStateEntries: WorkStateEntry[] = [
+  { list: 'auth-refactor', fields: { task: '刷新令牌接口', status: 'todo' } },
+  { list: 'auth-refactor', fields: { task: '补集成测试', status: 'todo' } },
+  { list: 'auth-refactor', fields: { task: '刷新令牌接口', status: 'doing' } },   // 同一任务，后写的覆盖先写的
+  { list: 'auth-refactor', fields: { task: '清理旧 session 表', status: 'dropped' } },
+];
 
+function layer0WorkState(): string {
+  const tasks = new Map<string, Record<string, string | null>>();
+  for (const e of workStateEntries) {
+    const name = String(e.fields.task);
+    tasks.set(name, { ...tasks.get(name), ...e.fields });
+  }
+  const open = [...tasks.values()].filter(t => !['done', 'dropped'].includes(String(t.status)));
+  return ['# Work state', 'Still open:', '- auth-refactor', ...open.map(t => `  - [${t.status}] ${t.task}`)].join('\n');
+}
+
+const SYMBOLS: Record<string, string> = { bugfix: '●', feature: '◆', refactor: '↻', change: '✓', discovery: '○', decision: '⚖' };
+
+/** Layer 1：claude-mem 的单行索引格式（ID 时间 类型符号 标题）+ Stats 汇总行 */
+function layer1Index(db: Database.Database, limit = 50): string {
   const rows = db.prepare(
-    'SELECT id, type, title FROM observations ORDER BY created_at DESC'
-  ).all() as { id: number; type: string; title: string }[];
+    'SELECT id, type, title, narrative, facts, created_at FROM observations ORDER BY created_at DESC, id DESC LIMIT ?'
+  ).all(limit) as { id: number; type: string; title: string; narrative: string; facts: string; created_at: string }[];
+  // read：读完这些观察全文的估算 token；work：假设观察者为每条花了 1,500 token
+  const read = rows.reduce((n, r) => n + Math.ceil((r.title.length + r.narrative.length + r.facts.length) / 4), 0);
+  const work = rows.length * 1500;
+  const lines = [
+    '# [demo] recent context',
+    'Legend: ●bugfix ◆feature ↻refactor ✓change ○discovery ⚖decision',
+    'Format: ID TIME TYPE TITLE',
+    '',
+    `Stats: ${rows.length} obs (${read}t read) | ${work.toLocaleString()}t work | ${Math.round((work - read) / work * 100)}% savings`,
+    '',
+    ...rows.reverse().map(r => `${r.id} ${r.created_at.slice(11, 16)} ${SYMBOLS[r.type] ?? '•'} ${r.title}`),
+  ];
+  return lines.join('\n');
+}
 
-  const lines = rows.map(r => `  ${r.id}. ${typeIcon[r.type] ?? '[obs]'} ${r.title}`);
-  return `## 最近记忆索引（共 ${rows.length} 条）\n\n${lines.join('\n')}\n\n> 使用 get_observations([id,...]) 获取详情`;
+/** 按测量裁剪：超过 10,000 字符就把条数减半重渲染（claude-mem ContextBudget 的最后一级） */
+function fitToBudget(db: Database.Database, limit = 10_000): { text: string; kept: number } {
+  let count = 50;
+  let text = layer1Index(db, count);
+  while (text.length > limit && count > 1) {
+    count = Math.floor(count / 2);
+    text = layer1Index(db, count);
+  }
+  return { text, kept: count };
 }
 
 /** Layer 2：上下文层（索引 + narrative） */
@@ -342,8 +382,13 @@ console.log('='.repeat(60));
 console.log('渐进式信息披露 Token 效率对比');
 console.log('='.repeat(60));
 
+// Layer 0
+console.log(`\n[Layer 0 - 工作状态] Agent 自己维护的待办，放在记忆之前`);
+console.log('-'.repeat(60));
+console.log(layer0WorkState());
+
 // Layer 1
-const l1 = layer1Index(db);
+const l1 = fitToBudget(db).text;
 const l1Tokens = estimateTokens(l1);
 console.log(`\n[Layer 1 - 索引层] 全部 ${totalObs} 条 Observation`);
 console.log('-'.repeat(60));

@@ -2,13 +2,16 @@
   "name": "ch05-hook-playground",
   "version": "1.0.0",
   "type": "module",
-  "description": "Hook 模拟器：演示 Claude Code Hook 调用流程",
+  "description": "极简宿主：按 Claude Code 规则执行 Hook 进程，演示同步/async、resume、deny 与退出码策略",
   "scripts": {
-    "demo": "tsx src/hook-simulator.ts"
+    "demo": "tsx src/demo.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
     "typescript": "^5.7.0",
     "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20.12"
   }
 }

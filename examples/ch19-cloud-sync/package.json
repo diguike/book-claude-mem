@@ -1,0 +1,19 @@
+{
+  "name": "ch19-cloud-sync",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "两台设备 + 一个 hub：数据库即队列、ack 盖戳、事务拉取、回声防护、墓碑",
+  "scripts": {
+    "demo": "tsx src/demo.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

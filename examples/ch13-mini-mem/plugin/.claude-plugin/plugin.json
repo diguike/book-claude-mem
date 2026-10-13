@@ -1,5 +1,6 @@
 {
   "name": "mini-mem",
-  "version": "1.0.0",
-  "description": "Minimal Agent Memory Plugin — stores observations and injects context"
+  "version": "1.1.0",
+  "description": "Minimal Agent Memory Plugin — stores observations and injects context",
+  "author": { "name": "Agent Memory 工程实战" }
 }

@@ -1,7 +1,7 @@
 ---
 title: 前言
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KAKQwYDjRiqn9DklFT4cwrpVnOf"
-last_synced: "2026-07-03T18:30:53+08:00"
+last_synced: "2026-10-13T11:40:59+08:00"
 ---
 
 > **配套资源**  
@@ -9,7 +9,7 @@ last_synced: "2026-07-03T18:30:53+08:00"
 > 在线阅读 · [inferloop.dev/claude-mem](https://inferloop.dev/claude-mem)
 
 > **For English readers**  
-> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (v12.6.2): hooks, the worker service, storage, search, and building a mini version from scratch. It is written in Chinese; browser translation works fine for reading it, and the code is on [GitHub](https://github.com/diguike/book-claude-mem). New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
+> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (revised for v13.35.0, October 2026): hooks, the worker service, storage, search, building a mini version from scratch, and the newer server runtime, multi-host adapters and cross-device sync. It is written in Chinese; browser translation works fine for reading it, and the code is on [GitHub](https://github.com/diguike/book-claude-mem). New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
 
 ## 为什么写这本书
 
@@ -20,6 +20,17 @@ last_synced: "2026-07-03T18:30:53+08:00"
 我第一次注意到 claude-mem 时，它已经在 GitHub 上积累了超过 10,000 stars——一个 Claude Code 的记忆插件能做到这个量级，说明痛点确实普遍。但真正让我产生写书冲动的不是 star 数，而是读完源码后的感受：它不是一个"把东西存起来再找出来"的 CRUD 应用，而是在解决一个更深层的问题——如何在有限的上下文窗口里，以最高效率向 Agent 提供它真正需要的信息。
 
 claude-mem 的 Progressive Disclosure（渐进式信息披露）设计、基于 Hook 的非侵入式架构、3 层搜索工作流，这些设计背后是对 LLM 注意力机制的深刻理解，对任何做 Agent 开发的工程师都有直接价值——不管你用不用 claude-mem 本身。
+
+## 第二版修订说明
+
+第一版基于 claude-mem v12.6.2。之后 claude-mem 官方的学习页面 [cmem.ai/learn](https://cmem.ai/learn) 推荐了这本书，而项目本身在一个大版本里变化很大：GitHub star 从我第一次注意到它时的一万出头涨到了 99,871（2026-10-12），许可证从 AGPL-3.0 改为 Apache-2.0，内部几乎每一层都重写过。
+
+这一版以 v13.35.0（2026-10-08 发布）为基线全面修订：
+
+- **架构变了的地方全部重写**：Hook 不再直接请求 Worker，而是先落盘到 spool；Worker 删掉了持久化队列，改用内存缓冲；开场上下文改为预渲染缓存；MCP 工具从 13 个增加到 24 个（Worker 运行时对模型暴露其中 19 个），检索改成强制分步的 `mem_search` 协议。第 4 到 11 章按新源码重新讲解
+- **设想变成了现实的地方改写为源码分析**：第一版第 16、17 章是“把插件改造成平台”的设想，v13 官方做出了 Server 运行时，这两章改为拿官方实现对照当初的设想
+- **新增两章**：第 18 章讲一份记忆怎么接入 17 种 Agent 宿主，第 19 章讲跨设备同步。原第 18 章前沿探索顺延为第 20 章
+- **每一处论断回到源码核对，每个示例在 Node.js 24 上重新跑通**。第 16 章的结论来自一次本地实跑（Postgres + Redis + 假的模型 provider），其中包括几处源码注释与实现不符的地方，书里如实写明
 
 ## 什么是 Claude Code
 
@@ -37,7 +48,7 @@ Claude Code 是 Anthropic 官方的命令行 AI 编程工具，直接运行在 s
 
 ## 这本书不是什么
 
-首先，它不是 claude-mem 用户手册的翻译。本书基于 v12.6.2，API 细节可能随版本变化，书的重心是稳定的架构设计与设计哲学。其次，第 15-18 章的企业篇是设计参考与架构推演，给出的是升级路径和取舍分析，不是可以直接生产部署的代码。
+首先，它不是 claude-mem 用户手册的翻译。本书基于 v13.35.0，claude-mem 迭代很快，行号和配置项会随版本变化，书的重心是相对稳定的架构设计与工程取舍。其次，第五部分讲的 Server 运行时在官方文档里仍标注为 Beta；第 17 章里团队权限、审计防篡改等内容属于 claude-mem 商业版保留的区域，书中给出的是自建设计，章节里都有明确标注，不是可以直接生产部署的代码。
 
 ## 这本书怎么读
 
@@ -51,7 +62,7 @@ Claude Code 是 Anthropic 官方的命令行 AI 编程工具，直接运行在 s
 
 **第四部分（实战篇）** 动手构建 mini-mem，做完你会拥有一个能在 Claude Code 里实际使用的 Memory Plugin。
 
-**第五部分（进阶篇）** 面向产品化：业界方案调研 + 平台架构升级路径。
+**第五部分（进阶篇）** 面向团队和产品化：业界方案调研、Server 运行时、企业特性、多宿主接入、跨设备同步，最后是前沿方向。
 
 每章都有配套的可执行代码（`examples/` 目录，TypeScript，可独立运行），也可以直接跳到感兴趣的章节，配合代码上手。
 
@@ -60,46 +71,48 @@ Claude Code 是 Anthropic 官方的命令行 AI 编程工具，直接运行在 s
 - **"我想快速上手"**：第 2 章 → 第 12 章 → 第 13 章
 - **"我想理解设计思想"**：第 1-3 章 → 第 8 章（Progressive Disclosure）
 - **"我想深入源码"**：第 4-7 章 → 第 9-11 章
-- **"我想做产品/平台"**：前面基础上 + 第 15-17 章
+- **"我想做产品/平台"**：前面基础上 + 第 15-17 章，团队部署重点看第 16 章的故障分析
+- **"我在用 Codex / Cursor / 多台机器"**：第 4 章 → 第 18 章 → 第 19 章
 
 ## 全书知识图谱
 
 ```mermaid
 graph TB
-    subgraph "Claude Code 宿主"
-        A[SessionStart Hook] --> B[Context Injection]
-        C[PostToolUse Hook] --> D[Observation Capture]
-        E[Stop Hook] --> F[Summary Generation]
+    subgraph host["宿主：Claude Code / Codex / Cursor / ...（第 5、18 章）"]
+        A["SessionStart"]
+        C["PostToolUse"]
+        E["Stop / SessionEnd"]
     end
-
-    subgraph "CLI Layer（快进快出）"
-        D --> G[HTTP POST to Worker]
-        B --> H[HTTP GET from Worker]
+    subgraph handoff["交接层（第 4、6 章）"]
+        SP[("hook-spool<br/>一个事件一个文件")]
+        CC[("context-cache<br/>预渲染的开场上下文")]
     end
-
-    subgraph "Worker Daemon（异步处理）"
-        G --> I[Pending Queue]
-        I --> J[Claude Agent SDK]
-        J --> K[AI Compression]
-        K --> L[Structured Observation]
+    subgraph worker["Worker（第 6、10 章）"]
+        BUF["内存缓冲 SessionMessageBuffer"]
+        OBS["观察者：生成结构化 Observation"]
     end
-
-    subgraph "Storage Layer"
-        L --> M[SQLite + FTS5]
-        L --> N[ChromaDB Embedding]
-        M --> O[Progressive Disclosure Index]
-        O --> H
+    subgraph store["存储（第 7 章）"]
+        DB[("SQLite + FTS5")]
+        VEC[("Chroma 向量")]
     end
-
-    subgraph "MCP Search（按需获取）"
-        P[search] --> M
-        Q[timeline] --> M
-        R[get_observations] --> M
+    subgraph read["读取（第 8、9、11 章）"]
+        IDX["开场索引 ≤ 10,000 字符"]
+        MS["mem_search 三步检索"]
+        KA["Knowledge Agent"]
     end
-
+    C --> SP --> BUF --> OBS --> DB
+    OBS --> VEC
+    E --> SP
+    DB --> CC --> A
+    A --> IDX
+    DB --> MS
+    VEC --> MS
+    DB --> KA
+    DB -.->|"第 16 章 Server 运行时"| PG[("Postgres + BullMQ")]
+    DB -.->|"第 19 章 云同步"| HUB[("sync hub")]
 ```
 
-核心链路：**Observe（Hook 捕获）→ Compress（AI 压缩）→ Store（SQLite+向量）→ Inject（Progressive Disclosure 索引注入）→ Search（MCP 按需获取）**
+核心链路：**Observe（Hook 落盘）→ Compress（观察者生成）→ Store（SQLite + 向量）→ Inject（开场索引）→ Search（MCP 分步获取）**
 
 ## 社区与勘误
 
@@ -107,7 +120,7 @@ graph TB
 
 ## 致谢
 
-感谢 Alex Newman 和 claude-mem 社区创建并维护了这个优秀的开源项目（AGPL-3.0），为这个领域提供了生产级的参考实现。
+感谢 Alex Newman 和 claude-mem 社区创建并维护了这个开源项目（v13 起以 Apache-2.0 发布），为这个领域提供了生产级的参考实现。
 
 ---
 

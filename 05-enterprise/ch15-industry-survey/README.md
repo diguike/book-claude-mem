@@ -1,7 +1,7 @@
 ---
 title: "第 15 章：业界 Agent Memory 方案调研"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KDaYw1QwniHcpSk1QHacu3GOn3e"
-last_synced: "2026-07-03T18:32:01+08:00"
+last_synced: "2026-10-13T11:43:10+08:00"
 ---
 
 ## OpenAI Memory / ChatGPT Memory 机制分析
@@ -82,8 +82,8 @@ results = m.search("编程语言偏好", user_id="alice")
 | 记忆单元 | 短句/事实 | 结构化 Observation |
 | 检索方式 | 向量相似度 | FTS5 + 向量混合 |
 | 注入方式 | 预检索注入 | Progressive Disclosure |
-| 运行环境 | 通用（任何 Agent） | Claude Code 插件 |
-| 隐私 | 需配置（支持本地/云） | 完全本地 |
+| 运行环境 | 通用（任何 Agent） | 17 种 Coding Agent 的插件或集成 |
+| 隐私 | 需配置（支持本地/云） | 默认本地；云同步和托管观察者需显式开启 |
 
 ### 值得借鉴的设计
 
@@ -107,7 +107,7 @@ Zep 定位为 Agent 的长期记忆基础设施服务。
 
 Zep 的"时间感知"设计值得关注：记忆不是平等的。一周前的决策比一年前的偏好更可能相关。Zep 通过时间衰减因子影响检索排名。
 
-这对 claude-mem 的索引排序有启发——目前 claude-mem 按时间倒序展示索引，但没有"重要性衰减"机制。
+claude-mem 后来走了一条相近的路：v13.29.0 加入了可选的 ACT-R 强化排序（`CLAUDE_MEM_REINFORCE_ALPHA`，默认关闭），被反复确认的老观察可以重新进入 SessionStart 的窗口（第 10 章）。区别在于 Zep 用衰减压低旧记忆，claude-mem 用强化抬高仍然有效的旧记忆。
 
 ## MemGPT / Letta：操作系统式内存管理
 
@@ -161,6 +161,22 @@ Cognee 的独特之处在于将知识图谱作为记忆的底层表示。
 - 团队知识管理：谁负责什么模块？模块之间怎么依赖？
 - 决策追溯：这个技术选型影响了哪些后续实现？
 - 冲突检测：新的决策是否与旧决策矛盾？
+
+## 宿主自带的记忆：Claude Code 与 Codex
+
+前面几种都是独立的记忆层。还有一类越来越重要的方案：Agent 宿主自己带的记忆。
+
+**Claude Code 的 auto-memory**：Claude Code 会把它认为值得记住的内容写成 Markdown 文件，放在 `~/.claude/projects/<编码后的工作目录>/memory/` 下，由一个 `MEMORY.md` 做索引，新会话开始时读取。**Codex** 也有自己的记忆目录 `~/.codex/memories`。这两个路径都出现在 claude-mem 的源码里，下面会讲到原因。
+
+宿主自带记忆的优势是零安装、与宿主的上下文管理深度集成；局限是格式和能力由宿主决定，记忆只在这一个宿主里可用，也没有自动的“观察 → 压缩”流水线，记什么由模型临场决定。
+
+claude-mem 对它的态度在一年里变了一次，这个变化本身就很说明问题：
+
+- **v12.7.2（2026-05）**：安装时默认给 Claude Code 设置 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`，关掉内置记忆，避免两套记忆同时注入
+- **v13.29 起**：提供 `npx claude-mem memory ingest`，把 auto-memory 的 Markdown 文件导入成观察（不调用模型，跳过 `MEMORY.md` 和超过 64 KiB 的文件）
+- **v13.35.0（2026-10）**：安装时改成询问，推荐“保持开启”；PreToolUse Hook 在宿主读取自己的记忆文件、或调用 `memory_search` 这类原生记忆工具时，用同一个查询在 claude-mem 里检索一次，把结果作为补充上下文附上；还可以配置一个笔记目录监听，持续导入（`docs/native-memory-bridge.md`）
+
+从“替代”到“共存并桥接”，背后的判断是：宿主的原生记忆不会消失，用户也不会只用一个宿主。独立记忆层的价值，越来越多地体现在跨宿主、跨设备、跨团队这几个宿主自己不做的方向上。第 18 章（多宿主）和第 19 章（多设备同步）展开这两个方向。
 
 ## Quick Try：各方案 5 分钟体验
 
@@ -237,7 +253,7 @@ print('Cognee installed. Requires Neo4j for full graph features.')
 
 ## 各方案横向对比与启发提炼
 
-按"记忆由谁管理、服务于哪一层"来划分，7 个方案的定位如图 15-1 所示：
+按“记忆由谁管理、服务于哪一层”来划分，各方案的定位如图 15-1 所示：
 
 ```mermaid
 graph TB
@@ -254,28 +270,29 @@ graph TB
         CG["Cognee<br/>知识图谱驱动"]
     end
     subgraph devtool[Developer Tool 层]
-        CM["claude-mem<br/>IDE 原生，Progressive Disclosure"]
+        CM["claude-mem<br/>多宿主，Progressive Disclosure"]
+        HN["宿主自带记忆<br/>Claude Code auto-memory / Codex memories"]
     end
     product ~~~ runtime
     runtime ~~~ infra
     infra ~~~ devtool
 ```
 
-*图 15-1：7 个 Agent Memory 方案的定位分类*
+*图 15-1：Agent Memory 方案的定位分类*
 
 再从能力维度做横向对比：
 
 | 方案 | 最大优势 | 最大限制 | 适用场景 | 开源 | Star 量级 |
 |------|---------|---------|---------|------|----------|
 | OpenAI Memory | 零配置，全自动 | 粒度粗，容量小 | 消费级聊天 | 否 | - |
-| LangChain Memory | 灵活组合，框架内开箱即用 | 深度绑定 LangChain | 框架内 Agent | 是 | 100K+ |
-| Mem0 | 多层记忆，Graph 支持 | 需要基础设施 | 通用 Agent 平台 | 是 | 25K+ |
-| Zep | 时间感知，自动摘要 | 部署复杂 | 有对话历史需求的产品 | 是 | 2K+ |
-| MemGPT/Letta | Agent 自管理，最大自主性 | Token 开销大，调试难 | 研究/长任务 Agent | 是 | 12K+ |
-| Cognee | 关系推理，冲突检测 | 图数据库运维复杂 | 知识密集型场景 | 是 | 2K+ |
-| claude-mem | Progressive Disclosure，IDE 原生 | 绑定 Claude Code 生态 | 工程师开发环境 | 是 | 10K+ |
+| LangChain Memory | 灵活组合，框架内开箱即用 | 深度绑定 LangChain | 框架内 Agent | 是 | 约 148K（LangChain 主仓库） |
+| Mem0 | 多层记忆，Graph 支持 | 需要基础设施 | 通用 Agent 平台 | 是 | 约 67K |
+| Zep | 时间感知，自动摘要 | 部署复杂 | 有对话历史需求的产品 | 是 | 约 5K |
+| MemGPT/Letta | Agent 自管理，最大自主性 | Token 开销大，调试难 | 研究/长任务 Agent | 是 | 约 25K |
+| Cognee | 关系推理，冲突检测 | 图数据库运维复杂 | 知识密集型场景 | 是 | 约 32K |
+| claude-mem | Progressive Disclosure，接入 17 种 Coding Agent，可自建 Server | 面向编码场景，团队共享需要 Server 运行时或云同步 | 工程师开发环境 | 是（Apache-2.0） | 约 100K |
 
-> Star 数据为 2026 年初的近似值，仅供参考量级。
+> Star 数为 2026-10-12 通过 GitHub API 查询的数值（claude-mem 99,871、LangChain 147,662、Mem0 67,025、Cognee 32,073、Letta 25,111、Zep 4,956），四舍五入到千位。
 
 ### 构建企业级平台时的关键借鉴
 
@@ -283,7 +300,7 @@ graph TB
 2. **来自 Zep**：时间衰减与自动摘要
 3. **来自 MemGPT**：Agent 应有"主动管理记忆"的能力
 4. **来自 Cognee**：知识图谱做关系追溯和冲突检测
-5. **来自 claude-mem**：Progressive Disclosure + Hook 驱动的非侵入性
+5. **来自 claude-mem**：Progressive Disclosure + Hook 驱动的非侵入性，以及与宿主原生记忆共存而不是对抗
 
 ---
 

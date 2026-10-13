@@ -1,127 +1,53 @@
 /**
- * RBAC — 基于角色的访问控制
+ * 把“角色”落到 claude-mem Server 的 API Key 上（设计示例）
  *
- * 定义角色权限矩阵，提供权限检查函数。
- * 适用于多租户 Memory 平台中不同角色对 observation 的访问控制。
+ * claude-mem 开源版的鉴权只看 API Key：每个 Key 绑定 team_id、可选的 project_id 和一组作用域。
+ * schema 里有 team_members(user_id, role)，角色取 owner / admin / member / viewer（src/storage/postgres/teams.ts），
+ * 但没有任何路由读它。这里演示一种接线方式：签发 Key 时把成员角色翻译成作用域和范围。
+ * 作用域检查语义与 claude-mem 一致：要求的每一项都必须被授予，只有 '*' 是通配。
+ * 运行：npm run demo:rbac
  */
 
-// 可执行的操作
-type Action = 'create' | 'read' | 'update' | 'delete' | 'search' | 'export';
+type Scope = 'memories:read' | 'memories:write' | 'memories:admin' | '*';
+type Role = 'viewer' | 'member' | 'admin' | 'owner'; // 与 PostgresTeamRole 一致
 
-// 资源类型
-type Resource = 'observation' | 'user' | 'organization' | 'audit_log';
+interface KeySpec { scopes: Scope[]; projectScoped: boolean; ttlDays: number | null }
 
-// 角色定义
-type Role = 'owner' | 'admin' | 'member' | 'viewer' | 'api_key';
-
-// 权限条目
-interface Permission {
-  resource: Resource;
-  actions: Action[];
-}
-
-// 角色 -> 权限映射表
-const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  owner: [
-    { resource: 'observation', actions: ['create', 'read', 'update', 'delete', 'search', 'export'] },
-    { resource: 'user', actions: ['create', 'read', 'update', 'delete'] },
-    { resource: 'organization', actions: ['read', 'update', 'delete'] },
-    { resource: 'audit_log', actions: ['read', 'export'] },
-  ],
-  admin: [
-    { resource: 'observation', actions: ['create', 'read', 'update', 'delete', 'search', 'export'] },
-    { resource: 'user', actions: ['create', 'read', 'update'] },
-    { resource: 'organization', actions: ['read', 'update'] },
-    { resource: 'audit_log', actions: ['read'] },
-  ],
-  member: [
-    { resource: 'observation', actions: ['create', 'read', 'update', 'search'] },
-    { resource: 'user', actions: ['read'] },
-    { resource: 'organization', actions: ['read'] },
-  ],
-  viewer: [
-    { resource: 'observation', actions: ['read', 'search'] },
-    { resource: 'user', actions: ['read'] },
-    { resource: 'organization', actions: ['read'] },
-  ],
-  api_key: [
-    { resource: 'observation', actions: ['create', 'read', 'search'] },
-  ],
+// 角色 → 签发 Key 时用的作用域、范围和有效期
+const ROLE_TO_KEY: Record<Role, KeySpec> = {
+  viewer: { scopes: ['memories:read'], projectScoped: true, ttlDays: 30 },
+  member: { scopes: ['memories:read', 'memories:write'], projectScoped: true, ttlDays: 90 },
+  admin: { scopes: ['memories:read', 'memories:write'], projectScoped: false, ttlDays: 90 },
+  owner: { scopes: ['memories:read', 'memories:write', 'memories:admin'], projectScoped: false, ttlDays: 7 },
 };
 
-/**
- * 检查指定角色是否有权限执行某操作
- */
-function checkPermission(role: Role, resource: Resource, action: Action): boolean {
-  const permissions = ROLE_PERMISSIONS[role];
-  if (!permissions) return false;
+// claude-mem 各接口要求的作用域（ServerV1PostgresRoutes.ts）
+const ROUTES: Array<{ route: string; required: Scope[]; needsTeamWide?: boolean }> = [
+  { route: 'POST /v1/search', required: ['memories:read'] },
+  { route: 'POST /v1/events', required: ['memories:write'] },
+  { route: 'DELETE /v1/memories/:id', required: ['memories:write'] },
+  { route: 'DELETE /v1/projects/:id/memory', required: ['memories:write'] },
+  { route: 'GET /v1/jobs?include=payload', required: ['memories:read', 'memories:admin'] },
+  { route: 'GET /v1/jobs 看到全团队', required: ['memories:read'], needsTeamWide: true }, // 项目级 Key 只看到自己项目的任务
+];
 
-  const resourcePerm = permissions.find((p) => p.resource === resource);
-  if (!resourcePerm) return false;
-
-  return resourcePerm.actions.includes(action);
+function hasRequiredScopes(granted: Scope[], required: Scope[]): boolean {
+  if (required.length === 0 || granted.includes('*')) return true;
+  return required.every(s => granted.includes(s));
 }
 
-/**
- * 批量检查权限，返回所有不通过的项
- */
-function checkPermissions(
-  role: Role,
-  checks: Array<{ resource: Resource; action: Action }>
-): Array<{ resource: Resource; action: Action; allowed: boolean }> {
-  return checks.map((check) => ({
-    ...check,
-    allowed: checkPermission(role, check.resource, check.action),
-  }));
+const roles = Object.keys(ROLE_TO_KEY) as Role[];
+console.log(`${'接口'.padEnd(36)}${roles.map(r => r.padEnd(8)).join('')}`);
+for (const { route, required, needsTeamWide } of ROUTES) {
+  const cells = roles.map(role => {
+    const spec = ROLE_TO_KEY[role];
+    const ok = hasRequiredScopes(spec.scopes, required) && !(needsTeamWide && spec.projectScoped);
+    return (ok ? 'Y' : '-').padEnd(8);
+  });
+  console.log(`${route.padEnd(36)}${cells.join('')}`);
 }
 
-/**
- * 获取角色的所有权限列表（用于前端展示）
- */
-function getRolePermissions(role: Role): Permission[] {
-  return ROLE_PERMISSIONS[role] || [];
-}
-
-// --- Demo 运行 ---
-
-function main() {
-  console.log('=== RBAC 权限检查示例 ===\n');
-
-  const testCases: Array<{ role: Role; resource: Resource; action: Action }> = [
-    { role: 'admin', resource: 'observation', action: 'delete' },
-    { role: 'member', resource: 'observation', action: 'delete' },
-    { role: 'viewer', resource: 'observation', action: 'read' },
-    { role: 'viewer', resource: 'observation', action: 'create' },
-    { role: 'api_key', resource: 'observation', action: 'search' },
-    { role: 'api_key', resource: 'user', action: 'read' },
-    { role: 'member', resource: 'audit_log', action: 'read' },
-    { role: 'owner', resource: 'audit_log', action: 'export' },
-  ];
-
-  for (const tc of testCases) {
-    const allowed = checkPermission(tc.role, tc.resource, tc.action);
-    const icon = allowed ? '[ALLOW]' : '[DENY] ';
-    console.log(`  ${icon} ${tc.role.padEnd(8)} | ${tc.resource.padEnd(14)} | ${tc.action}`);
-  }
-
-  console.log('\n=== viewer 角色权限列表 ===');
-  const viewerPerms = getRolePermissions('viewer');
-  for (const perm of viewerPerms) {
-    console.log(`  ${perm.resource}: ${perm.actions.join(', ')}`);
-  }
-
-  console.log('\n=== 批量检查 (member) ===');
-  const batchResults = checkPermissions('member', [
-    { resource: 'observation', action: 'create' },
-    { resource: 'observation', action: 'export' },
-    { resource: 'user', action: 'delete' },
-  ]);
-  for (const r of batchResults) {
-    console.log(`  ${r.allowed ? '[ALLOW]' : '[DENY] '} ${r.resource}.${r.action}`);
-  }
-}
-
-main();
-
-export { checkPermission, checkPermissions, getRolePermissions };
-export type { Role, Resource, Action, Permission };
+console.log('\n观察：');
+console.log('  1. member 能调 DELETE /v1/projects/:id/memory —— 删除和写入共用 memories:write，开源版区分不了。');
+console.log('  2. memories:admin 不隐含读写，owner 角色要同时授予三个作用域。');
+console.log('  3. 需要“能写但不能清空项目”的角色，只能在网关层按路由再拦一道，或者给 claude-mem 加一个 memories:delete 作用域。');

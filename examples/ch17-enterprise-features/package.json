@@ -1,16 +1,17 @@
 {
   "name": "ch17-enterprise-features",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "RBAC + 数据脱敏 + 审计日志",
+  "description": "自动脱敏（移植 claude-mem 规则）+ 角色到作用域的映射 + 哈希链审计日志",
   "scripts": {
+    "demo:redact": "tsx src/redaction-demo.ts",
     "demo:rbac": "tsx src/rbac.ts",
-    "demo:sanitizer": "tsx src/sanitizer.ts",
-    "demo:audit": "tsx src/audit-logger.ts"
+    "demo:audit": "tsx src/audit-logger.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "tsx": "^4.7.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.11.0"
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
   }
 }

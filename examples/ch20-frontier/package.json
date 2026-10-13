@@ -1,0 +1,15 @@
+{
+  "name": "ch20-frontier",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "开场索引的三种遗忘策略对比：默认最新 N 条 / claude-mem ACT-R / 指数衰减",
+  "scripts": {
+    "demo": "tsx src/forgetting.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

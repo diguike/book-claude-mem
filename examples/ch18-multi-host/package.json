@@ -1,0 +1,15 @@
+{
+  "name": "ch18-multi-host",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "声明式 transcript 引擎：同一份代码读 Codex 与 DSH 的会话日志",
+  "scripts": {
+    "demo": "tsx src/demo.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

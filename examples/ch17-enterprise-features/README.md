@@ -1,37 +1,21 @@
-# ch17-enterprise-features — RBAC + 数据脱敏 + 审计日志
+# ch17-enterprise-features：脱敏、角色映射、可校验审计
 
-本项目演示第 17 章企业级 Memory 平台的三个核心安全能力。
+第 17 章配套示例，三个独立脚本，无外部依赖。
 
-## 运行
+| 脚本 | 内容 |
+|------|------|
+| `npm run demo:redact` | `src/redaction.ts`（只导出函数）+ `src/redaction-demo.ts`：移植 claude-mem v13.35.0 `src/utils/redaction.ts` 的 11 条内置规则与 fail-closed 超长处理，演示内置规则的盲区（JSON 风格的 AWS 密钥、中文个人信息）和自定义规则的写法 |
+| `npm run demo:rbac` | `src/rbac.ts`：把企业角色翻译成 claude-mem Server 的 API Key 作用域，按真实的作用域检查语义（逐项命中、只有 `*` 通配）算出每个角色能调哪些接口 |
+| `npm run demo:audit` | `src/audit-logger.ts`：在 claude-mem `audit_log` 的字段上加哈希链，演示篡改检测和它的边界 |
 
 ```bash
-# 安装依赖
 npm install
-
-# 运行 RBAC 权限检查示例
+npm run demo:redact
 npm run demo:rbac
-
-# 运行数据脱敏示例
-npm run demo:sanitizer
-
-# 运行审计日志示例
 npm run demo:audit
+npm run typecheck
 ```
 
-## 文件说明
+`demo:redact` 里的测试密钥在运行时拼接生成，源码中不出现完整的密钥形态字符串。
 
-| 文件 | 说明 |
-|------|------|
-| `src/rbac.ts` | 基于角色的权限控制，定义权限矩阵并提供检查函数 |
-| `src/sanitizer.ts` | 敏感信息自动检测和脱敏（手机号、身份证、邮箱、银行卡等） |
-| `src/audit-logger.ts` | 结构化审计日志记录器，支持文件和控制台输出 |
-
-## 设计要点
-
-- RBAC 采用 `role -> permission[]` 映射，支持资源级细粒度控制
-- 脱敏器使用正则匹配 + 模式识别，可扩展自定义规则
-- 审计日志遵循不可变原则，记录 who/what/when/where
-
----
-
-更多讨论见 [inferloop.dev](https://inferloop.dev)
+`rbac.ts` 和 `audit-logger.ts` 是设计示例：claude-mem 开源版没有用户 / 角色模型，`audit_log` 也没有哈希链，这两项属于 `docs/ip-boundary.md` 列出的商业版保留区域，示例演示的是自建时的一种做法。

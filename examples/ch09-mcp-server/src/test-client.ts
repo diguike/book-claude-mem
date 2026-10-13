@@ -95,6 +95,24 @@ async function main() {
   console.log(`   [anchor] #${tlData.anchor.id}: ${tlData.anchor.title}`);
   for (const obs of tlData.after) console.log(`   [after]  #${obs.id}: ${obs.title}`);
 
+  // 6. mem_search：三步渐进搜索，服务端强制只能选上一步出现过的 ID
+  const text = (r: unknown) => {
+    const m = r as { result?: { content: { text: string }[] }; error?: { message: string } };
+    return m.error ? { error: m.error.message } : JSON.parse(m.result!.content[0].text);
+  };
+  console.log('\n6. mem_search 三步协议:');
+  const s1 = text(await call('tools/call', { name: 'mem_search', arguments: { query: '连接' } }));
+  console.log(`   step 1：索引 ${s1.index.map((r: { id: number }) => r.id).join(', ')}，continuation=${s1.continuation}`);
+  const s2 = text(await call('tools/call', { name: 'mem_search', arguments: { continuation: s1.continuation, selectedIds: [s1.index[0].id] } }));
+  console.log(`   step 2：时间线 ${s2.index.map((r: { id: number }) => r.id).join(', ')}`);
+  const s3 = text(await call('tools/call', { name: 'mem_search', arguments: { continuation: s2.continuation, selectedIds: [s2.index[0].id] } }));
+  console.log(`   step 3：${s3.note} 取到 ${s3.observations.length} 条详情：${s3.observations.map((o: { title: string }) => o.title).join('；')}`);
+  const again = text(await call('tools/call', { name: 'mem_search', arguments: { query: '连接' } }));
+  const bad = text(await call('tools/call', { name: 'mem_search', arguments: { continuation: again.continuation, selectedIds: [999] } }));
+  console.log(`   选了一个没披露过的 ID：${bad.error}`);
+  const reuse = text(await call('tools/call', { name: 'mem_search', arguments: { continuation: s1.continuation, selectedIds: [s1.index[0].id] } }));
+  console.log(`   重复使用已经用过的游标：${reuse.error}`);
+
   console.log('\n=== 测试完成 ===');
   server.stdin!.end();
   server.kill();

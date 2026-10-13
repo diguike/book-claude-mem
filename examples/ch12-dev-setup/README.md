@@ -4,29 +4,32 @@ title: "ch12 示例：开发环境验证"
 
 # ch12：开发环境验证脚本
 
-快速验证 claude-mem 开发环境是否配置正确。
+快速验证插件开发环境是否就绪。要求 Node.js 20.12 以上。
 
 ## 运行
 
 ```bash
 npm install
 
-# 完整环境检查
+# 完整环境检查：Node、Bun、tsx、better-sqlite3、FTS5、WAL、Claude Code CLI 等
 npm run check
 
-# 只检查 SQLite + FTS5
+# SQLite：FTS5、WAL，以及中文检索在 unicode61 / trigram / LIKE 下的命中对比
 npm run check:sqlite
 
-# 检查 Claude Code Plugin 目录
+# 校验一个插件目录（plugin.json、hooks/hooks.json、.mcp.json），默认检查 ../ch13-mini-mem/plugin
 npm run check:plugin
+npm run check:plugin -- /path/to/your/plugin
 ```
 
-## 检查项目
+`check:plugin` 是一个轻量的本地检查，Claude Code 自带的 `claude plugin validate <目录>` 更完整，两者可以一起用。
 
-- Node.js 版本（要求 20+）
-- Bun 是否已安装（可选，Worker 使用）
-- better-sqlite3 是否可以正常 require
-- SQLite FTS5 扩展是否可用
-- WAL 模式是否可以启用
-- Claude Code Plugin 目录是否存在
-- ANTHROPIC_API_KEY 环境变量是否设置
+## 文件说明
+
+| 文件 | 说明 |
+|------|------|
+| `src/check-env.ts` | 环境检查 |
+| `src/check-sqlite.ts` | SQLite 能力与中文检索对比 |
+| `src/check-plugin.ts` | 插件目录校验：事件名拼写、async 用法、`${CLAUDE_PLUGIN_ROOT}` 引用 |
+
+更多讨论见 [inferloop.dev](https://inferloop.dev)

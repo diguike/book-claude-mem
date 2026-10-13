@@ -84,39 +84,64 @@ console.log(`  已插入 ${testData.length} 条数据\n`);
 // 3. FTS5 搜索演示
 console.log('[3] FTS5 搜索演示...\n');
 
-function ftsSearch(query: string) {
-  const rows = db.prepare(`
-    SELECT o.id, o.content, o.category, o.project,
-           rank
+function rawMatch(match: string): any[] {
+  return db.prepare(`
+    SELECT o.id, o.content, o.category, o.project, rank
     FROM observations_fts fts
     JOIN observations o ON o.id = fts.rowid
     WHERE observations_fts MATCH ?
     ORDER BY rank
-  `).all(query);
-  return rows;
+  `).all(match);
 }
 
-const queries = [
-  'Next.js',                    // 简单关键词
-  'SQLite',                     // 精确匹配
-  'architecture',               // 按 category 搜索
-  'claude-mem',                 // 按 project 搜索
-  'database OR testing',        // 布尔 OR
-  '"GitHub Actions"',           // 短语匹配
-];
+function printRows(rows: any[]): void {
+  if (rows.length === 0) console.log('    无结果');
+  for (const row of rows) console.log(`    #${row.id} [${row.category}/${row.project}] ${row.content.slice(0, 50)}`);
+}
 
-for (const q of queries) {
-  console.log(`  搜索: "${q}"`);
-  const results = ftsSearch(q);
-  if (results.length === 0) {
-    console.log('    无结果');
-  } else {
-    for (const row of results as any[]) {
-      console.log(`    #${row.id} [${row.category}/${row.project}] ${row.content.slice(0, 60)}...`);
-    }
+// 3a. MATCH 的原生语法：只适合程序内部构造，不能直接拼用户输入
+console.log('  [3a] 原生 MATCH 语法（程序内部构造的查询）');
+for (const q of ['SQLite', 'database OR testing', '"GitHub Actions"']) {
+  console.log(`  MATCH ${q}`);
+  printRows(rawMatch(q));
+}
+
+// 3b. 用户输入：每个词单独加引号、内部引号翻倍，再用 AND 连接（claude-mem v13 的 buildFTSMatchQuery）
+function buildFtsQuery(query: string): string {
+  const tokens = (query.match(/\S+/g) ?? []).filter(t => /[\p{L}\p{N}]/u.test(t));
+  if (tokens.length === 0) return `"${query.replace(/"/g, '""')}"`;
+  return tokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' AND ');
+}
+
+console.log('\n  [3b] 用户输入：原样交给 MATCH vs 先经过 buildFtsQuery');
+for (const input of ['Next.js', 'claude-mem', 'Express SQLite', 'auth "unclosed']) {
+  let raw: string;
+  try {
+    raw = `${rawMatch(input).length} 条`;
+  } catch (e) {
+    raw = `报错 ${(e as Error).message}`;
   }
-  console.log('');
+  const safeQuery = buildFtsQuery(input);
+  console.log(`  输入 ${JSON.stringify(input)}：原样 → ${raw}；安全构造 ${safeQuery} → ${rawMatch(safeQuery).length} 条`);
 }
+
+// 3c. 中文：unicode61 把连续汉字当成一个 token，子串搜不到；改用 LIKE
+const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
+function search(input: string): { via: string; rows: any[] } {
+  if (CJK.test(input)) {
+    const pattern = `%${input.replace(/[\\%_]/g, '\\$&')}%`;
+    return { via: 'LIKE 子串', rows: db.prepare(`SELECT * FROM observations WHERE content LIKE ? ESCAPE '\\'`).all(pattern) };
+  }
+  return { via: 'FTS5', rows: rawMatch(buildFtsQuery(input)) };
+}
+
+console.log('\n  [3c] 中文查询：FTS5（unicode61）vs 子串回退');
+for (const input of ['数据库', '测试框架', '路由']) {
+  const ftsCount = rawMatch(buildFtsQuery(input)).length;
+  const { via, rows } = search(input);
+  console.log(`  ${input}：FTS5 ${ftsCount} 条；路由到 ${via} → ${rows.length} 条`);
+}
+console.log('');
 
 // 4. 高亮和摘要
 console.log('[4] FTS5 高亮与摘要...\n');

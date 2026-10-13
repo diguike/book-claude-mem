@@ -1,44 +1,32 @@
-# ch14-extensions — AI 压缩 + 向量搜索 + Viewer UI
+# ch14-extensions
 
-本项目演示第 14 章扩展模块的三个核心能力：
-
-1. 使用 Anthropic SDK 对 observation 进行 AI 压缩
-2. 使用 ChromaDB 实现语义向量搜索
-3. Express SSE 服务 + HTML 页面实时展示 observation 流
+mini-mem 的三个扩展演示：AI 压缩、向量检索、实时 Viewer。异步处理（spool + Worker）的演示在 `../ch06-worker-queue/`。
 
 ## 运行
 
 ```bash
-# 安装依赖
-npm install
+# onnxruntime-node 在 Linux x64 上默认会下载 CUDA 运行库，CPU 版已包含在 npm 包里，可以跳过
+ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm install
 
-# 复制环境变量并填入真实值
-cp .env.example .env
-
-# 运行 AI 压缩示例
+# 1. AI 压缩：需要 Anthropic API 凭据（ANTHROPIC_API_KEY 或 `ant auth login`）
 npm run demo:compress
+ANTHROPIC_MODEL=claude-haiku-5-5 npm run demo:compress   # 换成更便宜的模型
 
-# 运行向量搜索示例（需要本地 ChromaDB 服务）
-npm run demo:search
+# 2. 向量检索：先启动 Chroma
+uvx --from chromadb chroma run --path ./chroma-data --port 8000
+CHROMA_URL=http://localhost:8000 npm run demo:search
+# 第一次运行会从 HuggingFace 下载 embedding 模型；需要走代理时加 NODE_USE_ENV_PROXY=1
 
-# 启动 Viewer 服务
-npm run demo:viewer
+# 3. 实时 Viewer
+npm run demo:viewer   # 浏览器打开 http://localhost:3000
 ```
 
 ## 文件说明
 
 | 文件 | 说明 |
 |------|------|
-| `src/ai-compressor.ts` | 调用 Anthropic Claude API 对冗长 observation 进行摘要压缩 |
-| `src/vector-search.ts` | 基于 ChromaDB 的语义搜索，支持相似度查询 |
-| `src/viewer-server.ts` | Express SSE 服务器，提供实时 observation 流和简单 HTML UI |
-
-## 前置要求
-
-- Node.js >= 18
-- 有效的 `ANTHROPIC_API_KEY`
-- 向量搜索示例需要本地运行 ChromaDB（`docker run -p 8000:8000 chromadb/chroma`）
-
----
+| `src/ai-compressor.ts` | 用 Claude 把一批 observation 压缩成摘要 |
+| `src/vector-search.ts` | Chroma 写入、语义检索、按 metadata 过滤 |
+| `src/viewer-server.ts` | Express + SSE 实时推送 |
 
 更多讨论见 [inferloop.dev](https://inferloop.dev)

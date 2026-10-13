@@ -2,13 +2,13 @@
   "name": "ch09-mcp-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "最小化 MCP Server 实现：search + get_observations + timeline",
+  "description": "最小化 MCP Server：search / timeline / get_observations + 带 HMAC 游标的 mem_search 三步协议",
   "scripts": {
     "start": "tsx src/server.ts",
     "test": "tsx src/test-client.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

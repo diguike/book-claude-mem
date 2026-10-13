@@ -1,17 +1,23 @@
 /**
- * 向量搜索：使用 ChromaDB 实现 observation 的语义检索
+ * 向量搜索：使用 Chroma 实现 observation 的语义检索
  *
- * ChromaDB 内置 embedding 能力，无需额外调用 embedding API。
- * 适用于根据自然语言查询召回相关 observation 的场景。
+ * embedding 在本地计算（@chroma-core/default-embed，即 all-MiniLM-L6-v2），
+ * 与 claude-mem 的默认 embedding 函数相同；它以英文语料为主，对中文的区分度有限。
+ * 运行前先启动 Chroma：uvx --from chromadb chroma run --path ./chroma-data --port 8000
  */
 
 import { ChromaClient } from 'chromadb';
+import { DefaultEmbeddingFunction } from '@chroma-core/default-embed';
 
 const COLLECTION_NAME = 'observations';
+const embeddingFunction = new DefaultEmbeddingFunction();
 
-// 初始化 ChromaDB 客户端（连接本地实例）
+// 初始化 Chroma 客户端（连接本地实例），CHROMA_URL 形如 http://localhost:8000
+const url = new URL(process.env.CHROMA_URL || 'http://localhost:8000');
 const chroma = new ChromaClient({
-  path: process.env.CHROMA_HOST || 'http://localhost:8000',
+  host: url.hostname,
+  port: Number(url.port || (url.protocol === 'https:' ? 443 : 80)),
+  ssl: url.protocol === 'https:',
 });
 
 interface Observation {
@@ -29,6 +35,7 @@ async function seedObservations(observations: Observation[]) {
   const collection = await chroma.getOrCreateCollection({
     name: COLLECTION_NAME,
     metadata: { description: 'User observation memory store' },
+    embeddingFunction,
   });
 
   // 批量添加文档
@@ -49,7 +56,7 @@ async function seedObservations(observations: Observation[]) {
  * 语义搜索：根据自然语言查询返回最相关的 observation
  */
 async function semanticSearch(query: string, topK: number = 3) {
-  const collection = await chroma.getCollection({ name: COLLECTION_NAME });
+  const collection = await chroma.getCollection({ name: COLLECTION_NAME, embeddingFunction });
 
   const results = await collection.query({
     queryTexts: [query],
@@ -67,7 +74,7 @@ async function filteredSearch(
   category: string,
   topK: number = 3
 ) {
-  const collection = await chroma.getCollection({ name: COLLECTION_NAME });
+  const collection = await chroma.getCollection({ name: COLLECTION_NAME, embeddingFunction });
 
   const results = await collection.query({
     queryTexts: [query],
@@ -114,6 +121,9 @@ async function main() {
       timestamp: '2024-01-16T11:00:00Z',
     },
   ];
+
+  // 上次运行中断时可能留下同名 collection，先清掉
+  await chroma.deleteCollection({ name: COLLECTION_NAME }).catch(() => undefined);
 
   // 写入数据
   await seedObservations(observations);

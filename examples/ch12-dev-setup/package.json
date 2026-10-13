@@ -9,7 +9,7 @@
     "check:plugin": "tsx src/check-plugin.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

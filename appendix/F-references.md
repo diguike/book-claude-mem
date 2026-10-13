@@ -1,105 +1,96 @@
 ---
 title: "附录 F：参考资料"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Wzlhwc5YmiQthXkxZhScz1yKnkl"
-last_synced: "2026-07-03T18:32:30+08:00"
+last_synced: "2026-10-13T11:44:18+08:00"
 ---
 
 ## 核心项目
 
 ### claude-mem
-- **GitHub**：claude-mem 插件（版本 v12.6.2）
-- **安装**：`npx claude-mem` 或通过 Claude Code 插件市场
+- **GitHub**：[github.com/thedotmack/claude-mem](https://github.com/thedotmack/claude-mem)，本书基线 v13.35.0（2026-10-08），Apache-2.0（v13.0.0 起，此前为 AGPL-3.0）
+- **官网与文档**：[claude-mem.ai](https://claude-mem.ai)
+- **交互式入门课程**：[cmem.ai/learn](https://cmem.ai/learn)
+- **安装**：`npx claude-mem install`
+- 源码里值得一读的设计文档：`docs/ip-boundary.md`（开源边界）、`docs/server.md`（Server 运行时）、`docs/native-memory-bridge.md`（原生记忆桥接）、`docs/native-prompt-identity.md`（轮次身份）、`workers/sync-hub/DEPLOY.md`（同步 hub 部署）。注意 `docs/architecture-overview.md` 等部分文档落后于代码，以代码为准
 
 ### Claude Code
-- **官方文档**：Claude Code 使用指南（Anthropic 官网）
-- **Hook 文档**：Claude Code Hook 系统参考
-- **MCP 规范**：Model Context Protocol 规范文档（v2024-11-05）
+- **Hook 参考**：[code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks)
+- **插件**：`claude plugin validate`、`claude --plugin-dir`（本书在 2.1.296 上验证）
+- **记忆**：[code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory)
+
+### Model Context Protocol
+- **规范**：[modelcontextprotocol.io](https://modelcontextprotocol.io)
+- **TypeScript SDK**：[github.com/modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk)（本书示例用 1.32）
 
 ---
 
 ## 论文与研究
 
 ### Lost in the Middle
-> Liu, N. F., et al. (2023). **Lost in the Middle: How Language Models Use Long Contexts**. *Transactions of the Association for Computational Linguistics*, 12, 157–173.
+> Liu, N. F., et al. (2024). **Lost in the Middle: How Language Models Use Long Contexts**. *Transactions of the Association for Computational Linguistics*, 12, 157–173.
 
-关键结论：LLM 对长上下文首尾的信息注意力显著高于中间部分。第 8 章的 Context Injection 策略直接源自此研究。
+长上下文中间位置的信息更容易被模型忽略。第 3 章讨论上下文腐烂时引用了这一结论。
+
+### ACT-R 与遗忘的幂律
+> Anderson, J. R., & Schooler, L. J. (1991). **Reflections of the Environment in Memory**. *Psychological Science*, 2(6), 396–408.
+
+记忆的可提取性随时间按幂律衰减，并随每次重复出现而增强。claude-mem 的强化排序（`src/services/reinforcement/`）按这一模型计算，衰减指数取 0.5。第 7、20 章。
 
 ### Ebbinghaus 遗忘曲线
 > Ebbinghaus, H. (1885). **Über das Gedächtnis: Untersuchungen zur experimentellen Psychologie**. Leipzig: Duncker & Humblot.
 
-经典的记忆保留曲线研究，第 18 章的 Retention Score 算法使用了其衰减公式：R = e^(-t/S)。
+本书第一版的保留分数用的是指数衰减。第 20 章把它和 ACT-R 的幂律衰减放在一起比较。
 
 ### BM25 排序算法
 > Robertson, S., & Zaragoza, H. (2009). **The Probabilistic Relevance Framework: BM25 and Beyond**. *Foundations and Trends in Information Retrieval*, 3(4), 333–389.
 
-SQLite FTS5 的默认排序算法基于 BM25，第 7、9 章有详细说明。
+SQLite FTS5 的 `rank` 基于 BM25。第 7 章、附录 D。
 
 ### Retrieval-Augmented Generation (RAG)
 > Lewis, P., et al. (2020). **Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks**. *NeurIPS 2020*.
 
-RAG 是 claude-mem 向量搜索模块（ChromaDB + Embedding）的理论基础。
+第 1、8 章把渐进式披露和传统 RAG 做了对比。
 
 ---
 
 ## 开源项目
 
-### 同类 Agent 记忆系统
+### 同类 Agent 记忆系统（第 15 章）
 
 | 项目 | 简介 | 地址 |
 |------|------|------|
-| **Mem0** | 多层记忆架构，支持用户/会话/Agent 级别 | mem0.ai |
-| **Zep** | 对话长期记忆，时序感知搜索 | getzep.com |
-| **MemGPT / Letta** | 操作系统式虚拟上下文管理，AI 自主读写记忆 | letta.ai |
-| **Cognee** | 知识图谱增强记忆，实体抽取 + 关系推理 | cognee.ai |
-| **LangChain Memory** | 多种策略内置（Buffer/Summary/VectorStore/Entity） | python.langchain.com/docs/modules/memory |
+| **Mem0** | 多层记忆架构，支持用户 / 会话 / Agent 级别 | mem0.ai |
+| **Zep / Graphiti** | 时序知识图谱 | getzep.com |
+| **Letta（原 MemGPT）** | 操作系统式虚拟上下文管理，Agent 自主读写记忆 | letta.com |
+| **Cognee** | 知识图谱增强记忆 | cognee.ai |
+| **LangGraph** | 短期状态 + 长期 Store | langchain-ai.github.io/langgraph |
 
 ### 基础设施
 
-| 项目 | 用途 |
+| 项目 | 本书中的用途 |
 |------|------|
-| **better-sqlite3** | Node.js SQLite 驱动（同步 API） |
-| **ChromaDB** | 向量数据库，用于语义搜索 |
-| **BullMQ** | Redis 任务队列，用于异步 Worker |
-| **pgvector** | PostgreSQL 向量扩展，企业级部署 |
-| **Express** | Node.js HTTP 框架，Worker Service |
-
----
-
-## 标准与规范
-
-### Model Context Protocol (MCP)
-MCP 是 Anthropic 主导的开放协议，定义 AI 工具接口标准。本书第 9 章深度解析 claude-mem 的 MCP Server 实现。
-
-核心规范：
-- 传输层：JSON-RPC 2.0 over stdio（或 HTTP/SSE）
-- 工具定义：inputSchema（JSON Schema）+ description
-- 生命周期：initialize → tools/list → tools/call
-
-### JSON-RPC 2.0
-> Specification: jsonrpc.org/specification
-
-MCP 的底层通信协议，支持请求/响应/通知三种消息类型。
-
-### SQLite FTS5
-> SQLite FTS5 官方文档：sqlite.org/fts5.html
-
-附录 D 提供了 FTS5 语法速查表，涵盖建表、分词器选项、MATCH 语法和 BM25 排序。
+| **bun:sqlite / better-sqlite3** | claude-mem 用前者；本书示例用后者（12.x，支持 Node 24） |
+| **SQLite FTS5** | 全文检索，sqlite.org/fts5.html |
+| **Chroma** | 向量检索，claude-mem 本地默认的 embedding 是 all-MiniLM-L6-v2 |
+| **PostgreSQL / Valkey / BullMQ** | claude-mem Server 运行时的存储与队列（第 16 章） |
+| **pg_trgm** | Postgres 上的中文子串检索加速（第 16 章实测） |
+| **Cloudflare Durable Objects** | claude-mem 同步 hub 的每用户有序日志（第 19 章） |
 
 ---
 
 ## 延伸阅读
 
-### 上下文工程
-- **"The Context Window is All You Need"**：探讨 LLM 上下文管理的工程实践
-- **Anthropic 工程博客**：claude.ai/blog — 包含 Claude 上下文处理的技术细节
+### 上下文工程与 Agent 设计
+- **Building Effective Agents**（Anthropic Engineering，2024）：Agent 设计模式
+- **Effective Context Engineering for AI Agents**（Anthropic Engineering，2025）：第 3 章讨论的上下文腐烂、System Prompt 的“正确高度”、即时上下文，以及长任务的 Compaction / 结构化笔记 / Sub-Agent，都可以在这篇文章里找到对应的论述
 
-### Agent 系统设计
-- **"Building Effective Agents"**（Anthropic）：Agent 设计模式，包括工具使用和记忆管理
-- **LangChain 文档**：Agent 记忆模块的实现参考
+### 数据库
+- **SQLite Is Not a Toy Database**（Anton Zhiyanov）：SQLite 在生产环境中的能力边界
+- **Transactional Outbox 模式**：第 16 章 Server 运行时的写入链路、第 19 章“数据库就是队列”都是它的变体
 
-### 数据库设计
-- **"SQLite is Not a Toy Database"**：SQLite 在生产环境中的使用指南
-- **pgvector 文档**：PostgreSQL 向量搜索，第 16 章企业升级路径
+### 同系列
+- 本系列的 DeepSeek Harness 和 OpenClaw 两本源码精读，对应第 18 章的两个宿主
+- 《AI Agent 评测工程实战》：怎么用对照实验衡量记忆的效果（第 17 章）
 
 ---
 

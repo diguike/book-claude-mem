@@ -1,27 +1,23 @@
 ---
-title: "ch10 示例：Observation 压缩管道"
+title: "ch10 示例：Observation 流水线"
 ---
 
-# ch10：Observation 压缩管道 Demo
+# ch10：Observation 流水线
 
-演示 Observation 从原始工具调用数据到结构化记忆的压缩过程。
+不调用模型，按 claude-mem v13.35.0 的顺序走一遍第 10 章的流水线：
+
+1. 过滤链：跳过列表、Bash 跳过模式、整轮私有 prompt
+2. 剥离 6 种标签 + 可选脱敏（超长字段整段替换为 `<redacted type='oversize'/>`）
+3. 观察者 prompt：字段超长时保留头 60%、尾 30%，中间插入 `<elided … />` 标记
+4. 解析一段“不守规矩”的观察者回复：大写标签、`keyword: description` 形式的 concept、`<skip_summary />`
+5. `files_modified` 按真实写操作校正，模型多报的文件被丢弃
+6. `content_hash` 唯一约束：同一会话内的重复观察变成一次“强化”
 
 ## 运行
 
 ```bash
 npm install
-
-# 演示规则提取（不需要 API Key）
-npm run demo:rule
-
-# 演示完整管道（包含结构化输出）
 npm run demo
 ```
 
-## 演示内容
-
-1. **工具调用数据**：模拟 PostToolUse Hook 接收到的原始数据
-2. **规则提取**：基于工具名、文件路径、关键词的启发式提取
-3. **结构化输出**：生成 type/title/narrative/facts 四字段结构
-
-注意：`demo:ai` 需要设置 `ANTHROPIC_API_KEY` 环境变量，且会消耗 API 额度。
+更多讨论见 [inferloop.dev](https://inferloop.dev)

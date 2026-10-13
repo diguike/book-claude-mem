@@ -13,7 +13,7 @@ last_synced: ""
 > **作者**：递归客 | **社区**：[inferloop.dev](https://inferloop.dev) | **协议**：CC BY-NC-SA 4.0
 
 > **For English readers**  
-> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (v12.6.2): hooks, the worker service, storage, search, and building a mini version from scratch. It is written in Chinese; browser translation works fine for reading it, and all the code is in this repository. New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
+> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (revised for v13.35.0, October 2026): hooks, the worker service, storage, search, building a mini version from scratch, and the newer server runtime, multi-host adapters and cross-device sync. It is written in Chinese; browser translation works fine for reading it, and all the code is in this repository. New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
 
 基于 claude-mem 开源项目的深度源码解析，面向前端/全栈工程师的 Agent Memory 系统设计与实现指南。
 
@@ -31,9 +31,11 @@ last_synced: ""
 - Context Engineering：LLM 上下文窗口的工程化管理
 - Progressive Disclosure（渐进式信息披露）的设计哲学
 - MCP (Model Context Protocol) 的实际应用
-- SQLite + ChromaDB 混合搜索架构
+- SQLite + ChromaDB 混合搜索架构，以及中文检索的坑
 - 从零实现一个简版 Memory Plugin（mini-mem）
-- 企业级 Memory 平台的架构思考
+- claude-mem Server 运行时：Postgres + BullMQ 的多租户记忆服务
+- 一份记忆接入 17 种 Agent 宿主的适配层设计
+- 跨设备同步：以数据库为队列的恰好一次推送与拉取
 
 ## 快速开始
 
@@ -77,12 +79,14 @@ npm run test:context # 查看索引输出
 - [第 13 章　实现简版 Memory Plugin（mini-mem）](04-practice/ch13-mini-mem/README.md)
 - [第 14 章　进阶功能扩展](04-practice/ch14-extensions/README.md)
 
-**第五部分　进阶篇 — 企业级 Memory 平台**
+**第五部分　进阶篇 — 平台化、多宿主与前沿**
 
 - [第 15 章　业界 Agent Memory 方案调研](05-enterprise/ch15-industry-survey/README.md)
-- [第 16 章　从 Plugin 到平台的架构升级](05-enterprise/ch16-platform-upgrade/README.md)
-- [第 17 章　企业级特性设计](05-enterprise/ch17-enterprise-features/README.md)
-- [第 18 章　前沿探索](05-enterprise/ch18-frontier/README.md)
+- [第 16 章　从 Plugin 到平台：claude-mem Server 运行时](05-enterprise/ch16-platform-upgrade/README.md)
+- [第 17 章　企业级特性：开源版给了什么，还要补什么](05-enterprise/ch17-enterprise-features/README.md)
+- [第 18 章　一份记忆，多个宿主](05-enterprise/ch18-multi-host/README.md)
+- [第 19 章　跨设备同步：数据库就是队列](05-enterprise/ch19-cloud-sync/README.md)
+- [第 20 章　前沿探索](05-enterprise/ch20-frontier/README.md)
 
 **附录**
 
@@ -95,7 +99,8 @@ npm run test:context # 查看索引输出
 
 ## 参考项目
 
-- 源码：`_references/claude-mem/` (v12.6.2, AGPL-3.0)
+- 源码基线：claude-mem v13.35.0（2026-10-08 发布，Apache-2.0；v13.0.0 起由 AGPL-3.0 改为 Apache-2.0）
+- 第一版基于 v12.6.2，2026 年 10 月按 v13.35.0 全面修订，新增第 18、19 章
 - 官网：https://claude-mem.ai
 - GitHub：https://github.com/thedotmack/claude-mem
 
@@ -122,6 +127,8 @@ npm run test:context # 查看索引输出
 - [《AI Token 中转站实战》](https://inferloop.dev/llm-gateway)
 - [《百万级 AI Agent 平台架构》](https://inferloop.dev/enterprise-agent)
 - [《OpenClaw 源码解析》](https://inferloop.dev/openclaw)
+- [《一切皆插件：DeepSeek Harness 源码精读》](https://inferloop.dev/deepseek-harness)
+- [《AI Agent 评测工程实战》](https://inferloop.dev/agent-evals)
 - [《Transformer 教学》](https://inferloop.dev/transformer)
 - [《Claude Code Skill 开发指南》](https://inferloop.dev/claude-skill)
 - [《Claude 插件官方指南》](https://inferloop.dev/claude-plugins)

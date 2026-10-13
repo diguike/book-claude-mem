@@ -1,35 +1,35 @@
 # mini-mem — 简版 Agent Memory Plugin
 
-第 13 章配套的完整可运行项目。实现了 claude-mem 的核心闭环：
+第 13 章配套的完整可运行项目（1.1.0，按 claude-mem v13 的经验修订）。实现了 claude-mem 的核心闭环：
 
 ```
-Hook 捕获 → SQLite 存储 → FTS5 搜索 → MCP 暴露 → Context 注入
+Hook 捕获（含失败的调用）→ SQLite 存储 → FTS5 / 子串搜索 → MCP 暴露 → SessionStart 注入
 ```
+
+要求 Node.js 20.12 以上。
 
 ## 快速开始
 
 ```bash
-# 1. 安装依赖
 npm install
-
-# 2. 编译 TypeScript
 npm run build
 
-# 3. 测试 save hook（模拟一次工具调用）
-npm run test:save
+# 测试数据放到临时目录，不碰真实的 ~/.mini-mem
+export MINI_MEM_DATA_DIR=$(mktemp -d)
 
-# 4. 测试 context hook（应该输出 Markdown 索引表）
-npm run test:context
-
-# 5. 查看数据库内容
-sqlite3 ~/.mini-mem/mini-mem.db "SELECT id, type, title FROM observations;"
+npm run test:save      # 模拟一次成功的 Edit
+npm run test:fail      # 模拟一次失败的 Bash（PostToolUseFailure）
+npm run test:context   # 输出注入的索引
+npm run test:resume    # resume 时输出空内容
+npm run test:budget    # 验证注入文本不超过 10,000 字符
+npm run test:search    # MCP 端到端测试（英文、中文、中英粘连）
 ```
 
-## 安装到 Claude Code
+## 在 Claude Code 里使用
 
 ```bash
-npm run install-plugin
-# 重启 Claude Code 后生效
+claude plugin validate ./plugin   # 校验插件目录
+npm run claude:dev                # 等价于 claude --plugin-dir ./plugin
 ```
 
 ## 项目结构
@@ -37,30 +37,34 @@ npm run install-plugin
 ```
 src/
 ├── hooks/
-│   ├── context-hook.ts    # SessionStart：注入索引
-│   └── save-hook.ts       # PostToolUse：保存观察
+│   ├── save-hook.ts       # PostToolUse / PostToolUseFailure：保存观察（async）
+│   ├── context-hook.ts    # SessionStart：注入索引（resume 不注入）
+│   ├── context-render.ts  # 单行索引渲染 + 10,000 字符预算裁剪
+│   └── budget-test.ts
 ├── mcp/
-│   └── server.ts          # MCP Server：search + get_observations
+│   ├── server.ts          # MCP Server：search + get_observations（readOnlyHint）
+│   └── test-client.ts     # MCP SDK 客户端端到端测试
 ├── db/
-│   ├── schema.ts          # 建表语句
-│   └── store.ts           # CRUD + FTS5 搜索
+│   ├── schema.ts          # 建表、FTS5、触发器
+│   └── store.ts           # 读写；FTS5 为主，CJK 走 LIKE 子串
 └── utils/
-    ├── stdin.ts           # 读取 Hook 输入
-    └── title-extractor.ts # 标题提取（规则版，不调 AI）
+    ├── stdin.ts
+    ├── project.ts
+    └── title-extractor.ts # 规则提取标题和类型（不调 AI）
 plugin/
 ├── .claude-plugin/plugin.json
-├── hooks/hooks.json       # Hook 注册
-└── .mcp.json              # MCP Server 注册
+├── hooks/hooks.json
+└── .mcp.json
 ```
 
 ## 与 claude-mem 的对比
 
-| 特性 | mini-mem | claude-mem |
-|------|----------|-----------|
-| AI 压缩 | 规则提取 | Claude Agent SDK |
-| 向量搜索 | 无 | ChromaDB |
-| Worker | 无（同步） | Express daemon |
-| Progressive Disclosure | 基础索引表 | 完整 3 层工作流 |
-| 多平台 | 仅 Claude Code | Claude Code + Cursor + Gemini CLI |
+| 特性 | mini-mem | claude-mem v13.35.0 |
+|------|----------|--------------------|
+| 记录内容 | 规则提取标题 | 观察者模型压缩成结构化 Observation |
+| 写入路径 | Hook 进程直接写 SQLite | Hook 写 spool 文件，Worker 取件后处理 |
+| 注入格式 | 单行索引，按条数减半裁剪 | 单行索引 + 待办清单 + 摘要，按优先级裁剪 |
+| 搜索 | FTS5 + CJK 子串 | Chroma 语义为主，SQLite FTS5/子串补齐 |
+| MCP 工具 | 2 个 | 19 个（本地运行时） |
 
-mini-mem 是理解 claude-mem 核心原理的最小实现。掌握后，阅读 claude-mem 的完整源码会更容易。
+更多讨论见 [inferloop.dev](https://inferloop.dev)

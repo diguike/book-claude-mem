@@ -167,3 +167,6 @@ examples/*/*.sqlite*
 # 大文件归档
 *.tgz
 *.tar.gz
+
+# 示例运行时生成的数据库
+.data/

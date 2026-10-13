@@ -1,51 +1,55 @@
 /**
- * PostToolUse Hook：捕获工具调用，存入 SQLite
+ * PostToolUse / PostToolUseFailure Hook：捕获工具调用，写入 SQLite
  *
- * 触发时机：Claude 每次使用工具（读文件、写文件、执行命令等）后
- * 设计原则：快进快出，< 30ms 返回，永不阻塞 Claude Code
+ * hooks.json 里标了 "async": true，Claude Code 不等它返回
+ * 任何错误都以退出码 0 结束，绝不阻塞会话
  */
 import { readJsonFromStdin } from '../utils/stdin.js';
 import { ObservationStore } from '../db/store.js';
-import { extractTitle, categorize, extractFiles } from '../utils/title-extractor.js';
+import { extractTitle, categorize, extractFiles, shouldSkipTool } from '../utils/title-extractor.js';
+import { projectNameOf } from '../utils/project.js';
 
-interface PostToolUseInput {
+interface ToolHookInput {
   session_id: string;
   cwd: string;
+  hook_event_name?: string;
   tool_name: string;
   tool_input: Record<string, unknown>;
-  tool_response: Record<string, unknown>;
+  tool_response?: unknown;
+  error?: unknown;          // PostToolUseFailure 才有
+  is_interrupt?: boolean;   // PostToolUseFailure 才有
 }
 
-async function main() {
-  // 静默 stderr，防止第三方库的 warning 污染 stdout JSON
-  process.stderr.write = (() => true) as typeof process.stderr.write;
-
+async function main(): Promise<void> {
   try {
-    const input = await readJsonFromStdin<PostToolUseInput>();
-    const { session_id, cwd, tool_name, tool_input, tool_response } = input;
+    const input = await readJsonFromStdin<ToolHookInput>();
+    const { session_id, cwd, tool_name } = input;
+    const toolInput = input.tool_input ?? {};
+    if (!tool_name || shouldSkipTool(tool_name)) return;
 
-    // 提取标题和分类（规则提取，不调 AI）
-    const title = extractTitle(tool_name, tool_input);
-    const narrative = `${tool_name}: ${JSON.stringify(tool_input).slice(0, 200)}`;
-    const project = cwd.split('/').pop() || 'unknown';
+    const failed = input.hook_event_name === 'PostToolUseFailure' || input.error !== undefined;
+    const outcome = failed ? { error: input.error, is_interrupt: input.is_interrupt === true } : input.tool_response;
+    const title = (failed ? '失败: ' : '') + extractTitle(tool_name, toolInput);
+    const narrative = `${tool_name} ${JSON.stringify(toolInput).slice(0, 200)} → ${JSON.stringify(outcome ?? null).slice(0, 200)}`;
 
-    // 存入数据库
     const store = new ObservationStore();
-    store.insertObservation({
-      sessionId: session_id,
-      project,
-      type: categorize(tool_name),
-      title,
-      narrative,
-      files: extractFiles(tool_input),
-    });
-    store.close();
-
-    // 返回 success（必须是合法 JSON）
-    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
+    try {
+      store.insertObservation({
+        sessionId: session_id,
+        project: projectNameOf(cwd),
+        type: categorize(tool_name),
+        title,
+        narrative,
+        files: extractFiles(toolInput),
+      });
+    } finally {
+      store.close();
+    }
   } catch {
-    // 永不阻塞 Claude Code——即使出错也返回 success
-    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
+    // 记忆是锦上添花：解析失败、数据库被锁都只是丢掉这一条
+  } finally {
+    // stdout 只写一次 JSON
+    process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + '\n');
   }
 }
 

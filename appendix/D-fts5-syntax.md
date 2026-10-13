@@ -1,8 +1,10 @@
 ---
 title: "附录 D：SQLite FTS5 语法速查"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/UMVTw2zvVidw9ukUJVmcIrVunqc"
-last_synced: "2026-07-03T18:32:24+08:00"
+last_synced: "2026-10-13T11:44:11+08:00"
 ---
+
+本附录的 SQL 和查询示例都在 SQLite 3.53.2（better-sqlite3 12.11）上实跑过，报错信息照录。
 
 ## 建表
 
@@ -20,11 +22,21 @@ CREATE VIRTUAL TABLE docs_fts USING fts5(
 
 | 分词器 | 说明 | 适用 |
 |--------|------|------|
-| `unicode61` | Unicode 词边界分词（默认） | 英文、标点分隔的文本 |
+| `unicode61` | 按空白和标点切词（默认）。连续的汉字会被当成一个 token | 英文、代码标识符 |
 | `porter unicode61` | unicode61 + Porter 词干提取 | 英文（搜索 "running" 匹配 "run"） |
-| `trigram` | 三字符滑动窗口 | 中文、日文等无空格语言 |
+| `trigram` | 三字符滑动窗口，可做子串匹配 | 3 个字以上的中日韩子串；索引会大好几倍 |
 
-中文推荐：`tokenize='trigram'`（牺牲精度换召回率）或自定义分词器。
+### 中文怎么办
+
+SQLite 3.53.2 上的实测（第 12 章 `npm run check:sqlite`）：
+
+| 查询 | unicode61 | trigram | LIKE 子串 |
+|------|-----------|---------|----------|
+| 项目（在“修改了项目配置”里） | 0 | 0 | 1 |
+| 连接池（在“修复连接池泄漏导致的 5xx”里） | 0 | 1 | 1 |
+| JWT（在“JWT 验证改为异步”里） | 1 | 1 | 1 |
+
+两个字的中文查询很常见，`trigram` 也搜不到。claude-mem v13 和 mini-mem 的做法是：保留 `unicode61`，查询里含中日韩文字时改用 `LIKE '%…%'` 子串匹配，并转义 `%`、`_`、`\`（第 7 章）。数据量大到 LIKE 扛不住时，再考虑接入分词扩展或向量检索。
 
 ## MATCH 查询语法
 
@@ -107,31 +119,44 @@ CREATE TRIGGER docs_fts_delete AFTER DELETE ON docs BEGIN
   INSERT INTO docs_fts(docs_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
 END;
 
--- 更新时同步（先删后插）
-CREATE TRIGGER docs_fts_update AFTER UPDATE ON docs BEGIN
+-- 更新时同步（先删后插）。只在索引列变化时触发：
+-- 写 synced_at、计数器这类非索引列时不必重建索引
+CREATE TRIGGER docs_fts_update AFTER UPDATE OF title, body ON docs BEGIN
   INSERT INTO docs_fts(docs_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
   INSERT INTO docs_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
 END;
 ```
 
-## 安全：转义用户输入
+## 安全：不要把用户输入原样交给 MATCH
+
+MATCH 的参数是一门查询语言。`.`、`-`、`:`、`*`、引号、`AND / OR / NOT` 都有语法含义，普通的项目名就能让查询报错：
+
+| 用户输入 | 原样交给 MATCH | 安全构造后 |
+|---------|---------------|-----------|
+| `Next.js` | `fts5: syntax error near "."` | `"Next.js"` |
+| `claude-mem` | `no such column: mem` | `"claude-mem"` |
+| `auth "unclosed` | `unterminated string` | `"auth" AND """unclosed"` |
+
+只把双引号翻倍是不够的。claude-mem 的 `buildFTSMatchQuery()`（第 7 章）把每个词单独包进双引号，再用程序拼接的 `AND` 连起来，用户的输入里写不出任何操作符：
 
 ```typescript
-function escapeFTS5(query: string): string {
-  // 1. 转义双引号
-  let escaped = query.replace(/"/g, '""');
-  // 2. 如果需要精确短语，用双引号包裹
-  // 3. 如果接受分词搜索，直接传入（FTS5 会按空格分词）
-  return escaped;
+function buildFtsQuery(query: string): string {
+  // 没有字母或数字的词（单独的 -、&）丢掉：unicode61 不为它们建索引，留着会让整个 AND 查询为空
+  const tokens = (query.match(/\S+/g) ?? []).filter(t => /[\p{L}\p{N}]/u.test(t));
+  if (tokens.length === 0) return `"${query.replace(/"/g, '""')}"`;
+  return tokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' AND ');
 }
 ```
 
+需要给高级用户开放 OR、前缀、NEAR 时，单独做一个“原始查询”入口，并捕获 SQLite 的语法错误。
+
 ## 常见陷阱
 
-1. **FTS5 表不支持 UPDATE**：只能通过 'delete' + INSERT 模拟
-2. **content= 同步不是自动的**：必须手动建触发器
-3. **MATCH 不能用在 WHERE 的子查询中**：必须直接对 FTS 表使用
-4. **中文分词效果差**：unicode61 按 Unicode 词边界分，中文每个字可能被当作独立 token
+1. **外部内容表不会自动同步**：`content='docs'` 只告诉 FTS5 去哪里取原文，增删改都要靠触发器
+2. **更新触发器写成 `AFTER UPDATE`**：哪一列变化都会重建这一行的索引。写同步标记、计数器的高频更新会带来不必要的开销，改用 `AFTER UPDATE OF <索引列>`
+3. **用户输入直接进 MATCH**：见上一节
+4. **中文用默认分词器搜不到**：见“中文怎么办”
+5. **`rank` 越小越相关**：BM25 分数是负数，`ORDER BY rank` 升序才是最相关的在前
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 

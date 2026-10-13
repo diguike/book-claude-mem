@@ -28,6 +28,11 @@ MCP 使用 JSON-RPC 2.0 over stdio：
 
 | 工具 | 用途 |
 |------|------|
-| `search` | FTS5 全文搜索，返回 ID + 标题列表 |
-| `get_observations` | 根据 ID 数组返回完整 narrative + facts |
-| `timeline` | 返回某条 Observation 前后的时间线 |
+| `mem_search` | 服务端强制的三步渐进搜索：索引 → 时间线 → 详情。游标由 HMAC 派生、状态只存在服务端，只能选上一步披露过的 ID（claude-mem v13.35 `mem_search` 的精简版） |
+| `search` | FTS5 搜索，每个词单独加引号后用 AND 连接；trigram 搜不到的短中文查询回退到 LIKE |
+| `get_observations` | 按 ID 取详情 |
+| `timeline` | 某条观察前后的时间线，同一秒写入的记录用 id 打破平局 |
+
+所有工具都声明了 `readOnlyHint`。
+
+更多讨论见 [inferloop.dev](https://inferloop.dev)

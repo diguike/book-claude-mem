@@ -1,55 +1,69 @@
 ---
 title: "第 12 章：开发环境搭建"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/PPq1wgX9si8JqykA1UJcvVngn3e"
-last_synced: "2026-05-05T16:52:35Z"
+last_synced: "2026-10-13T11:42:45+08:00"
 ---
 
 ## Claude Code Plugin 开发基础
 
-**运行时说明**：claude-mem 源码使用 Bun 作为运行时（利用其内置的 SQLite 驱动和 TypeScript 支持），而本章的 mini-mem 实战项目使用 Node.js + better-sqlite3，对前端工程师更友好且无需安装额外运行时。两种选择都是可行的。
+**运行时说明**：claude-mem 源码运行在 Bun 上（利用它内置的 SQLite 驱动和直接执行 TypeScript 的能力），第 13 章的 mini-mem 则用 Node.js 加 better-sqlite3，对大多数前端和全栈工程师更熟悉，也不需要额外安装运行时。本章的配套代码要求 Node.js 20.12 以上，better-sqlite3 用 12.x（它的预编译包覆盖 Node 20 到 26；11.x 在 Node 24 上没有预编译包，源码编译会失败）。
 
-开发一个 Claude Code Plugin 需要理解三个核心概念：Hooks、MCP Server 和 Plugin 目录结构。
+开发一个 Claude Code Plugin 需要理解三件事：插件目录结构、Hook 和 MCP Server。
 
-### Plugin 目录结构
+### 插件目录结构
 
 ```
 my-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # 插件元数据
 ├── hooks/
-│   └── hooks.json           # Hook 注册配置
-├── scripts/
-│   ├── my-hook.js           # Hook 脚本
-│   └── mcp-server.js        # MCP Server
+│   └── hooks.json           # Hook 注册
+├── .mcp.json                # MCP Server 注册（可选）
 ├── skills/
 │   └── my-skill/
-│       └── SKILL.md         # Skill 定义
-└── package.json
+│       └── SKILL.md         # Skill 定义（可选）
+└── scripts/                 # Hook 和 MCP Server 的可执行文件
 ```
 
-`plugin.json` 定义了插件的基本信息：
+claude-mem 的插件目录是仓库里的 `plugin/`，结构相同，另有 `modes/`（观察模式）和 `ui/`（Viewer 的静态资源）。仓库根目录的 `.claude-plugin/marketplace.json` 把它发布成一个插件市场，用户才能通过 `/plugin marketplace add thedotmack/claude-mem` 安装。
+
+`plugin.json` 定义插件的基本信息：
 
 ```json
 {
   "name": "mini-mem",
-  "version": "1.0.0",
-  "description": "简版 Memory Plugin",
-  "author": "Your Name"
+  "version": "1.1.0",
+  "description": "Minimal Agent Memory Plugin — stores observations and injects context",
+  "author": { "name": "Your Name" }
 }
 ```
 
+### 本地加载与校验
+
+开发时不需要发布到市场。Claude Code 提供两个命令：
+
+```bash
+# 校验插件目录：manifest、hooks.json、skills 等
+claude plugin validate ./plugin
+
+# 只在这次会话里加载本地插件目录
+claude --plugin-dir ./plugin
+```
+
+`claude plugin validate` 会指出常见问题，比如缺少作者信息、命令里的 `${CLAUDE_PLUGIN_ROOT}` 没加引号（路径含空格时命令会被拆开）。本书在 Claude Code 2.1.296 上验证过这两个命令。旧版书介绍的“把插件目录软链到 `~/.claude/plugins/`”的做法不再推荐。
+
 ### Hook 注册
 
-`hooks.json` 是插件与 Claude Code 交互的核心配置：
+`hooks/hooks.json` 是插件与 Claude Code 交互的核心配置。mini-mem 的版本：
 
 ```json
 {
   "hooks": {
     "SessionStart": [{
-      "matcher": "startup",
+      "matcher": "startup|clear|compact",
       "hooks": [{
         "type": "command",
-        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/context-hook.js",
+        "command": "node \"${CLAUDE_PLUGIN_ROOT}/../dist/hooks/context-hook.js\"",
         "timeout": 30
       }]
     }],
@@ -57,109 +71,126 @@ my-plugin/
       "matcher": "*",
       "hooks": [{
         "type": "command",
-        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/save-hook.js",
-        "timeout": 30
+        "command": "node \"${CLAUDE_PLUGIN_ROOT}/../dist/hooks/save-hook.js\"",
+        "timeout": 30,
+        "async": true
       }]
     }]
   }
 }
 ```
 
-`${CLAUDE_PLUGIN_ROOT}` 是 Claude Code 自动注入的环境变量，指向插件安装目录。
+几个要点，都来自第 5 章对 claude-mem 的分析：
 
-## Hook 配置与调试技巧
+- `${CLAUDE_PLUGIN_ROOT}` 由 Claude Code 注入，指向插件目录。用双引号包住
+- 只写数据、不需要宿主读取返回值的 Hook（PostToolUse、PostToolUseFailure、Stop、SessionEnd）标 `"async": true`，宿主不等它
+- 需要把内容注入模型、或者需要拒绝某个操作的 Hook（SessionStart、UserPromptSubmit、PreToolUse）必须同步
+- SessionStart 的 matcher 不要包含 `resume`：恢复的会话已经有完整上下文，再注入会让 prompt cache 失效
+- 宿主给 SessionEnd 的时间很短（claude-mem 源码注释里记的是 1.5 秒），只适合做“写一个文件”这种事
 
-### 手动测试 Hook
+### 退出码
 
-Hook 脚本从 stdin 读取 JSON，向 stdout 写入 JSON。可以手动模拟：
+Claude Code 对 Hook 退出码的解释：
+
+| 退出码 | 含义 |
+|-------|------|
+| 0 | 成功，读取 stdout 上的 JSON |
+| 2 | 阻断：UserPromptSubmit 会丢掉 prompt，PreToolUse 会拒绝工具调用，Stop 会让 Agent 继续工作 |
+| 其他 | 非阻断错误，stderr 展示给用户 |
+
+记忆这类后台功能永远不应该返回 2。claude-mem v13 的做法是所有路径都返回 0，需要拒绝某个工具调用时，用 stdout JSON 里的 `permissionDecision: 'deny'` 明确表达，而不是靠退出码（第 4、5 章）。
+
+## Hook 调试
+
+### 手动喂 stdin
+
+Hook 从 stdin 读 JSON，向 stdout 写 JSON，可以直接在命令行模拟：
 
 ```bash
-# 模拟 PostToolUse Hook 调用
+# 模拟一次 PostToolUse
 echo '{
   "session_id": "test-session-123",
   "cwd": "/home/user/my-project",
+  "hook_event_name": "PostToolUse",
   "tool_name": "Edit",
+  "tool_use_id": "toolu_01",
   "tool_input": {"file_path": "src/index.ts", "old_string": "foo", "new_string": "bar"},
   "tool_response": {"success": true}
-}' | node scripts/save-hook.js
+}' | node dist/hooks/save-hook.js
+
+# 模拟一次失败的工具调用（PostToolUseFailure 没有 tool_response，有 error）
+echo '{"session_id":"t","cwd":"/tmp/demo","hook_event_name":"PostToolUseFailure",
+  "tool_name":"Bash","tool_input":{"command":"npm test"},"error":"Exit code 1","is_interrupt":false}' \
+  | node dist/hooks/save-hook.js
 ```
 
 ### 调试模式
-
-启动 Claude Code 时加 `--debug` 参数，可以看到 Hook 执行的详细日志：
 
 ```bash
 claude --debug
 ```
 
-输出包含：
-- 哪些 Hook 被匹配
-- 执行命令和参数
-- 耗时统计
-- 返回值
+输出会显示哪些 Hook 被匹配、执行的命令、耗时和返回值。
 
 ### 常见问题
 
-**Hook 不执行**：检查 matcher 是否匹配（区分大小写），确认脚本有执行权限。
+**Hook 不执行**：matcher 区分大小写；事件名拼错时宿主会静默忽略（`PostToolUseFailure` 写成 `PostToolFailure` 不会报错）。先跑一遍 `claude plugin validate`。
 
-**输出污染**：Hook 脚本中 `console.error` 或第三方库的 warning 会污染 stdout。用 `process.stderr.write = () => true` 禁用 stderr 输出。
+**输出被忽略**：stdout 必须只有一段合法 JSON。调试时顺手写的 `console.log`、某个库打到 stdout 的提示，都会让整段输出无效。stderr 不影响 stdout 的解析，所以不需要把 stderr 整个吞掉（旧版书和 claude-mem v12 都这么做过）；更好的做法是把诊断信息写进日志文件，claude-mem v13 用的是“执行期间缓冲 stderr、退出时丢弃”的方式（第 5 章）。
 
-**超时**：由 hooks.json 中的 `timeout` 字段指定（单位秒）。claude-mem 中不同 Hook 设置了 60-300 秒不等的超时。mini-mem 使用 30 秒即可满足需求。
+**注入的内容模型没收到**：SessionStart 的输出超过 10,000 字符时，Claude Code 会把整段换成一个预览，模型实际收不到任何内容，Hook 却显示成功。注入前先量长度（第 8 章）。
 
-## MCP Server 本地开发流程
+**超时**：`timeout` 单位是秒。同步 Hook 的时间就是用户等待的时间；第 5 章实测过，一个 Hook 进程光加载 3 MB 的打包文件就要几百毫秒。
 
-MCP Server 是一个独立的 Node.js 进程，通过 stdio 与 Claude Code 通信。
+## MCP Server 本地开发
 
-### 开发步骤
+MCP Server 是一个独立进程，通过 stdio 与宿主通信。
 
-1. 安装 MCP SDK：
+### 骨架
 
 ```bash
 npm install @modelcontextprotocol/sdk
 ```
 
-2. 创建 MCP Server 骨架：
-
 ```typescript
-// scripts/mcp-server.ts
+// src/mcp/server.ts
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-const server = new Server({
-  name: 'mini-mem-search',
-  version: '1.0.0'
-}, {
-  capabilities: { tools: {} }
-});
+const server = new Server({ name: 'mini-mem', version: '1.1.0' }, { capabilities: { tools: {} } });
 
-// 注册工具列表
-server.setRequestHandler('tools/list', async () => ({
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [{
     name: 'search',
-    description: 'Search memory',
-    inputSchema: { type: 'object', properties: { query: { type: 'string' } } }
-  }]
+    description: 'Search memory. Returns a compact index with IDs.',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+    annotations: { readOnlyHint: true },   // plan mode 下可以免确认运行
+  }],
 }));
 
-// 处理工具调用
-server.setRequestHandler('tools/call', async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  // 处理逻辑...
-  return { content: [{ type: 'text', text: 'result' }] };
+  return { content: [{ type: 'text', text: `result for ${name}` }] };
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+await server.connect(new StdioServerTransport());
 ```
 
-3. 在 `.mcp.json` 中注册：
+`setRequestHandler` 的第一个参数必须是 SDK 导出的 Schema 对象（`ListToolsRequestSchema`、`CallToolRequestSchema`），SDK 从里面读出方法名。旧版书写的 `server.setRequestHandler('tools/list', ...)` 在当前 SDK 上会抛出 `Schema is missing a method literal`。
+
+在插件目录的 `.mcp.json` 里注册：
 
 ```json
 {
   "mcpServers": {
     "mini-mem": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.js"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../dist/mcp/server.js"]
     }
   }
 }
@@ -167,35 +198,30 @@ await server.connect(transport);
 
 ### 本地调试
 
-MCP Server 通过 stdio 通信，不方便直接调试。推荐方式：
-- 将日志写入文件（不要写到 stdout/stderr）
-- 使用 MCP Inspector 工具测试
+MCP Server 占用了 stdout，不能用 `console.log` 打日志。两种调试办法：
+
+- 写一个测试客户端，用 SDK 的 `Client` 加 `StdioClientTransport` 启动服务端，走一遍 `initialize`、`tools/list`、`tools/call`（mini-mem 的 `npm run test:search` 就是这么做的）
+- 用 MCP Inspector：`npx @modelcontextprotocol/inspector node dist/mcp/server.js`，在浏览器里手动调用工具
 
 ## SQLite 开发工具链
 
-本书的 mini-mem 使用 `better-sqlite3`（Node.js 原生）或 `bun:sqlite`（Bun 环境）。
+### 驱动的选择
 
-### 安装
-
-```bash
-# Node.js 环境
-npm install better-sqlite3
-npm install -D @types/better-sqlite3
-
-# Bun 环境无需安装，bun:sqlite 是内置模块
-```
+| 运行时 | 驱动 | 说明 |
+|-------|------|------|
+| Node.js | better-sqlite3 12.x | 同步 API，性能好，需要原生模块 |
+| Node.js 22.13+ | `node:sqlite` | 内置，无需安装（更早的 22.x 需要 `--experimental-sqlite` 参数），API 仍标记为实验性 |
+| Bun | `bun:sqlite` | 内置，claude-mem 用的就是它 |
 
 ### 基础用法
 
 ```typescript
-// Node.js + better-sqlite3
 import Database from 'better-sqlite3';
 
 const db = new Database('./data/mini-mem.db');
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+db.pragma('journal_mode = WAL');   // 读写互不阻塞
+db.pragma('busy_timeout = 5000');  // Hook 进程和 MCP 进程同时访问时，遇到锁等 5 秒
 
-// 建表
 db.exec(`
   CREATE TABLE IF NOT EXISTS observations (
     id INTEGER PRIMARY KEY,
@@ -205,51 +231,62 @@ db.exec(`
   )
 `);
 
-// 插入
-const insert = db.prepare('INSERT INTO observations (title, narrative) VALUES (?, ?)');
-insert.run('修复了超时问题', '将超时时间从 60s 改为 120s');
-
-// 查询
+db.prepare('INSERT INTO observations (title, narrative) VALUES (?, ?)').run('修复超时问题', '把超时从 60s 改为 120s');
 const rows = db.prepare('SELECT * FROM observations WHERE title LIKE ?').all('%超时%');
 ```
 
-### FTS5 建表
+`busy_timeout` 在旧版书里没有提。一个记忆插件至少有三类进程会同时打开数据库：Hook、MCP Server、后台 Worker。不设它，写锁冲突时会立刻抛 `SQLITE_BUSY`；claude-mem 在 v13.10.2 补上了这一项。
+
+### FTS5 与中文
 
 ```sql
 CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
-  title,
-  narrative,
+  title, narrative,
   content='observations',
-  content_rowid='id',
-  tokenize='unicode61'
+  content_rowid='id'
 );
-
--- 同步触发器
-CREATE TRIGGER IF NOT EXISTS obs_fts_insert AFTER INSERT ON observations BEGIN
-  INSERT INTO observations_fts(rowid, title, narrative)
-  VALUES (new.id, new.title, new.narrative);
-END;
 ```
+
+不指定 `tokenize` 时用 `unicode61`，它按空白和标点切词，连续的汉字会被当成一个 token。配套脚本 `npm run check:sqlite` 在本机 SQLite 3.53.2 上实测了三种方式：
+
+| 查询 | unicode61 | trigram | LIKE 子串 |
+|------|-----------|---------|----------|
+| 项目（在“修改了项目配置”里） | 0 | 0 | 1 |
+| 连接池（在“修复连接池泄漏导致的 5xx”里） | 0 | 1 | 1 |
+| payload（在“payload优先使用LLM”里） | 0 | 1 | 1 |
+| JWT（在“JWT 验证改为异步”里） | 1 | 1 | 1 |
+
+`trigram` 分词器按 3 个字符的滑动窗口建索引，3 个字以上的子串能搜到，2 个字的查询（中文里很常见）仍然搜不到，索引也会大好几倍。claude-mem v13 的选择是保留 `unicode61`，查询里含中日韩文字时直接改用 LIKE 子串匹配（第 7 章）。mini-mem 用了同样的办法。
 
 ### 推荐工具
 
-- **DB Browser for SQLite**：GUI 查看和编辑数据库
-- **sqlite3 CLI**：命令行快速查询
-- **Beekeeper Studio**：跨平台数据库客户端
+- **sqlite3 命令行**：快速查询，`sqlite3 ~/.mini-mem/mini-mem.db "SELECT id, title FROM observations"`
+- **DB Browser for SQLite**、**Beekeeper Studio**：图形界面
+
+## 配套代码
+
+`examples/ch12-dev-setup/` 有三个脚本：
+
+```bash
+npm install
+npm run check          # Node、Bun、better-sqlite3、FTS5、WAL、Claude Code 等环境检查
+npm run check:sqlite   # FTS5、WAL 和上表的中文检索对比
+npm run check:plugin   # 校验一个插件目录（默认检查第 13 章的 mini-mem）
+```
 
 ---
 
 **思考题**
 
-1. 如何为你的 Plugin 写自动化测试？设计一个测试方案，覆盖 Hook 触发、Worker 处理、MCP 查询三个环节，考虑如何 mock Claude Code 的调用。
-2. 开发环境中 SQLite 数据库文件存储在本地，如果误删了怎么办？设计一个简单的备份策略（提示：考虑 SQLite 的 `.backup` 命令和定时任务）。
-3. 当前 FTS5 索引和主表数据是通过触发器同步的。如果触发器出现问题导致索引和数据不一致，如何检测和修复？
+1. 如何为你的插件写自动化测试？设计一个方案，覆盖 Hook 触发、数据落库、MCP 查询三个环节，考虑如何模拟宿主的调用，以及如何让测试不碰真实的数据目录。
+2. 开发环境里的 SQLite 文件被误删了怎么办？设计一个简单的备份策略（提示：考虑 SQLite 的 `.backup` 命令，以及 WAL 模式下直接复制文件的风险）。
+3. FTS5 索引和主表靠触发器同步。触发器出问题导致两者不一致时，如何检测和修复？（提示：FTS5 的 `'integrity-check'` 和 `'rebuild'` 命令）
 
 ---
 
 > 本书开源发布于 [inferloop.dev](https://inferloop.dev)，转载请注明出处。
 
-下一章开始正式实现 mini-mem——一个可在 Claude Code 中实际运行的简版 Memory Plugin。
+下一章正式实现 mini-mem：一个能在 Claude Code 里实际运行的简版 Memory Plugin。
 
 ---
 

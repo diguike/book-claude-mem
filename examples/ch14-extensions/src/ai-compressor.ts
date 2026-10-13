@@ -7,10 +7,12 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-// 初始化 Anthropic 客户端
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// 凭据从环境读取：ANTHROPIC_API_KEY、ANTHROPIC_AUTH_TOKEN 或 `ant auth login` 的登录配置
+const client = new Anthropic();
+
+// 默认用 Claude Opus 5.5；想压成本可以改用更便宜的模型，例如 ANTHROPIC_MODEL=claude-haiku-5-5
+// （claude-mem 自己的观察者默认用 Haiku 档）
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-5-5';
 
 interface Observation {
   id: string;
@@ -37,8 +39,10 @@ async function compressObservations(
     .join('\n');
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
+    model: MODEL,
+    max_tokens: 4096,
+    // 摘要是简单任务，用低 effort 控制思考开销（Opus 5.5 的 thinking 不能关闭，只能调 effort）
+    output_config: { effort: 'low' },
     messages: [
       {
         role: 'user',
@@ -56,9 +60,15 @@ ${observationText}`,
     ],
   });
 
-  // 提取文本响应
-  const textBlock = message.content.find((block) => block.type === 'text');
-  const summary = textBlock?.text ?? '';
+  // 安全分类器可能拒绝请求，读内容前先看 stop_reason
+  if (message.stop_reason === 'refusal') {
+    throw new Error(`请求被拒绝：${message.stop_details?.explanation ?? '无说明'}`);
+  }
+  // content 是多种 block 的联合类型，先按 type 收窄再读 text
+  const summary = message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
 
   return {
     summary,
