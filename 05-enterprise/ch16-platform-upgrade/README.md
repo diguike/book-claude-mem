@@ -1,12 +1,12 @@
 ---
 title: "第 16 章：从 Plugin 到平台：claude-mem Server 运行时"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/AfWHw1XmhilSuWkD8eyc9KmInIg"
-last_synced: "2026-10-13T11:43:27+08:00"
+last_synced: "2026-10-28T15:16:12+08:00"
 ---
 
-本书第一版写这一章时，claude-mem 只有单机插件一种形态，这一章只能是设想：给它加 JWT 认证、PostgreSQL 行级安全（RLS）、pgvector 和 BullMQ 队列，把它改造成多用户平台。到了 v13，claude-mem 自己做出了这个平台：`src/server/` 下的 Server 运行时，Postgres 存储、BullMQ 队列、API Key 鉴权，随 v13 的 Apache-2.0 许可一起开源，官方文档 `docs/server.md` 标注为 Beta。
+要把一个单机记忆插件改造成多用户平台，直觉方案大致是这样：JWT 认证，PostgreSQL 行级安全（RLS）做租户隔离，pgvector 做检索，按组织划分 BullMQ 队列。到了 v13，claude-mem 自己做出了这个平台：`src/server/` 下的 Server 运行时，Postgres 存储、BullMQ 队列、API Key 鉴权，随 v13 的 Apache-2.0 许可一起开源，官方文档 `docs/server.md` 标注为 Beta。
 
-所以这一版改了写法：拿官方实现对照当初的设想，看哪些地方和直觉方案一致，哪些地方做了不同选择，以及它目前还缺什么。本章的结论来自 v13.35.0 源码，以及一次本地实跑：Postgres 16 容器、Redis、一个不调模型的假 provider（`CLAUDE_MEM_SERVER_PROVIDER=custom`），把事件写入、生成、故障、运维重试都走了一遍。
+本章逐层阅读官方实现，并拿它和直觉方案对照：哪些地方一致，哪些地方做了不同选择，它目前还缺什么。本章的结论来自 v13.35.0 源码，以及一次本地实跑：Postgres 16 容器（下文的 compose 文件用的是 17）、Redis、一个不调模型的假 provider（`CLAUDE_MEM_SERVER_PROVIDER=custom`），把事件写入、生成、故障、运维重试都走了一遍。
 
 ## 两种运行时
 
@@ -138,7 +138,7 @@ worker 对 BullMQ payload 也不信任：它按 `generation_job_id` 重新加载
 
 ## 租户隔离写在 schema 里
 
-第一版的设想是 PostgreSQL RLS：给每张表加策略，按会话变量过滤。claude-mem 走的是另一条路，隔离分两层，都不依赖 RLS。
+直觉方案用 PostgreSQL RLS：给每张表加策略，按会话变量过滤。claude-mem 走的是另一条路，隔离分两层，都不依赖 RLS。
 
 第一层是外键。`projects` 表声明了 `UNIQUE (id, team_id)`，`api_keys`、`audit_log`、`server_sessions`、`agent_events`、`observation_generation_jobs`、`observations` 这 6 张表都同时带 `project_id` 和 `team_id`，并用复合外键指向 `projects(id, team_id)`，如图 16-3 所示。`observation_sources`、`observation_generation_job_events` 这类子表不带租户列，通过外键挂在上述父表下，跟随父表级联删除：
 
@@ -175,7 +175,7 @@ erDiagram
 
 第二层是查询。每个读接口都在 `WHERE` 里带上调用方 API Key 所属的 `team_id`，项目级的 Key 再加 `project_id`。跨租户访问返回 404 而不是 403：`loadScopedById()` 的 `scopeMismatch: 'not-found'` 让“这个 ID 属于别的团队”和“这个 ID 不存在”返回完全相同的响应，调用方没法用 403 和 404 的差别探测别人的数据。
 
-| | RLS（第一版设想） | 复合外键 + 应用层 WHERE（claude-mem） |
+| | RLS（直觉方案） | 复合外键 + 应用层 WHERE（claude-mem） |
 |---|---|---|
 | 漏写过滤条件 | 数据库兜底 | 会泄露，靠代码审查和测试 |
 | 错配写入 | 策略可以拦，要单独写 `WITH CHECK` | 外键直接拒绝 |
@@ -311,7 +311,7 @@ Server 运行时的检索是 Postgres 全文搜索。`observations` 表有一个
 content_search TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
 ```
 
-查询用 `websearch_to_tsquery('english', $query)`，按 `ts_rank` 排序。表里还有一个 `embedding JSONB` 列，生成时可以写入，但 v13.35.0 的检索路径没有读它，也没有用 pgvector。第一版设想里的“tsvector + 向量混合检索”，官方目前只做了前一半。
+查询用 `websearch_to_tsquery('english', $query)`，按 `ts_rank` 排序。表里还有一个 `embedding JSONB` 列，生成时可以写入，但 v13.35.0 的检索路径没有读它，也没有用 pgvector。直觉方案里的“tsvector + 向量混合检索”，官方目前只做了前一半。
 
 `'english'` 配置对中文的问题和第 7 章 FTS5 的问题同源：它按空白和标点切词，一整段连续的中文会成为一个词。实测：
 
@@ -356,9 +356,9 @@ claude mcp add --transport http claude-mem https://<your-host>/v1/mcp \
 
 有一项能力目前留在 worker 上：`UserPromptSubmit` 阶段的语义上下文注入（`/api/context/semantic`）。Server 还没有对应接口，官方的发布评估报告把它列为待办。
 
-## 和第一版设想的对照
+## 和直觉方案的对照
 
-| 维度 | 第一版设想 | claude-mem v13.35.0 Server |
+| 维度 | 直觉方案 | claude-mem v13.35.0 Server |
 |---|---|---|
 | 认证 | JWT，解析 `userId / orgId` | API Key，SHA-256 存储，每请求查库 |
 | 隔离 | RLS | 复合外键 + 应用层 WHERE，跨租户返回 404 |
@@ -369,7 +369,7 @@ claude mcp add --transport http claude-mem https://<your-host>/v1/mcp \
 | 配额 | 未设计 | 限流 / 请求配额 / token 配额 / 计量，全部 fail open |
 | 运维 | 按队列深度扩缩容 | 横向扩 worker；卡住的任务手动 cancel + retry |
 
-设想里最有价值、实现里也确实做到了的，是发件箱和幂等这一组设计。它们决定了一个记忆服务在网络抖动和进程重启下会不会丢数据、会不会重复付费。设想里低估的是“运维面”：启动对账还没做；卡住的任务只能靠运维手动 `cancel + retry`；修正 Key 作用域的 `migrate-scopes` 做了，但没接到 `npx claude-mem` 命令上。
+官方实现里最有价值的是发件箱和幂等这一组设计，直觉方案里完全没有这一项。它们决定了一个记忆服务在网络抖动和进程重启下会不会丢数据、会不会重复付费。两者都低估了“运维面”：启动对账还没做；卡住的任务只能靠运维手动 `cancel + retry`；修正 Key 作用域的 `migrate-scopes` 做了，但没接到 `npx claude-mem` 命令上。
 
 开源版也有明确的边界。`docs/ip-boundary.md` 列出了不会进入 Apache-2.0 仓库的部分，包括团队/组织级记忆同步、SSO/SAML/SCIM、企业级 RBAC、审计日志界面、DLP 策略引擎。下一章讨论这些企业特性，在开源版的基础上要补什么、怎么补。
 

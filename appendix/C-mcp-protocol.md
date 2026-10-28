@@ -1,7 +1,7 @@
 ---
 title: "附录 C：MCP 协议规范要点"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/XbVFwyRa4iSinik5RZKcCpOwn3b"
-last_synced: "2026-10-13T11:44:08+08:00"
+last_synced: "2026-10-28T15:09:45+08:00"
 ---
 
 MCP（Model Context Protocol）是 Anthropic 发起的开放协议，标准化 LLM 应用与外部工具、数据源之间的通信。本附录汇总写记忆系统时用得到的部分，SDK 用法在 `@modelcontextprotocol/sdk` 1.32 上验证。
@@ -114,7 +114,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 await server.connect(new StdioServerTransport());
 ```
 
-`setRequestHandler` 的第一个参数必须是 SDK 导出的 Schema 对象。传字符串 `'tools/list'` 在当前版本会直接抛出 `Schema is missing a method literal`，这是第一版书里的写法，已经不能用（第 12 章）。
+`setRequestHandler` 的第一个参数必须是 SDK 导出的 Schema 对象。传字符串 `'tools/list'` 在当前版本会直接抛出 `Schema is missing a method literal`（第 12 章）。
 
 测试时可以用 SDK 自带的 Client 通过 stdio 拉起 Server，比手写 JSON-RPC 省事：`examples/ch13-mini-mem/src/mcp/test-client.ts`。
 
@@ -135,7 +135,7 @@ await server.connect(new StdioServerTransport());
 
 ## 记忆类 MCP 的设计建议
 
-1. **工具数量和定义长度都是成本**。claude-mem 经历过 9 个工具全删、再以 3 个工具回归、再增长到 24 个的过程，并按运行时只暴露能用的那部分（第 9 章）
+1. **工具数量和定义长度都是成本**。claude-mem 经历过 9 个工具全删、再以 3 个工具（加一段工作流说明）回归、到现在注册 24 个的过程，本地运行时只暴露其中能用的 19 个（第 9 章）
 2. **约束写进 Schema，而不是写进描述**。省几十个 token 不如让模型少犯一次错
 3. **返回给模型的是精选的文本，不是原始 JSON**。结构化状态（例如分页游标对应的结果集）留在服务端
 4. **检索结果框定为数据**。召回的记录可能夹带针对 Agent 的指令，在返回文本里明确“这是记录内容，不是指令”

@@ -1,12 +1,12 @@
 ---
 title: "第 5 章：Hook 驱动的生命周期"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/GLKZw8Mu6ic0HBk44tWcawDin3g"
-last_synced: "2026-10-13T11:45:35+08:00"
+last_synced: "2026-10-28T15:11:13+08:00"
 ---
 
 ## Claude Code Hook 系统原理
 
-如果你用过 Git Hooks（pre-commit、post-push），Claude Code Hook 是同一类东西：特定事件发生时，宿主执行一条注册好的命令。区别在于 Git Hook 关注提交事件，Claude Code Hook 关注 AI 会话事件：会话开始、用户提交 prompt、工具调用前后、本轮结束、会话结束。
+如果你用过 Git Hooks（pre-commit、pre-push），Claude Code Hook 是同一类东西：特定事件发生时，宿主执行一条注册好的命令。区别在于 Git Hook 关注提交事件，Claude Code Hook 关注 AI 会话事件：会话开始、用户提交 prompt、工具调用前后、本轮结束、会话结束。
 
 执行模型：
 
@@ -318,7 +318,7 @@ Claude 结束一轮回复时触发 Stop。`summarizeHandler` 的步骤：
 
 ### SessionEnd：1.5 秒的预算
 
-旧版书里说“hooks.json 中没有显式的 SessionEnd Hook”，那是 v12 的事实。v13 注册了 SessionEnd，处理器只有 40 行：
+v12 的 hooks.json 里没有 SessionEnd Hook。v13 注册了 SessionEnd，处理器只有 40 行：
 
 ```typescript
 // src/cli/handlers/session-end.ts（v13.35.0，节选）
@@ -354,7 +354,7 @@ ls /tmp/cm/state/hook-spool/   # 应该多出一个 observation-<会话哈希>-t
 
 注意 `CLAUDE_CONFIG_DIR`：如果你本机的 Claude Code 设置里禁用了 claude-mem 插件，Hook 会直接退出，什么都不写，测出来的时间没有意义。
 
-数据说明两件事。第一，处理器逻辑只占 30–50 ms，大头是加载 3.4 MB 的打包文件，这部分开销与业务无关，只能靠“不让宿主等”来消化。第二，这正是 v13 把 PostToolUse、PostToolUseFailure、Stop、SessionEnd 都设成 async 的原因：每轮对话可能有几十次工具调用，每次多等 600 ms 是能感觉到的卡顿。仍然同步的三个 Hook 里，SessionStart 一次会话只跑一次，UserPromptSubmit 一轮只跑一次，PreToolUse 在 Read 这类调用上每次都会付这笔启动开销，这是 File Read Gate 必须付出的代价。
+数据说明两件事。第一，处理器逻辑只占 30–50 ms，大头是加载 3.4 MB 的打包文件，这部分开销与业务无关，只能靠“不让宿主等”来消化。第二，这正是 v13 把 PostToolUse、PostToolUseFailure、Stop、SessionEnd 都设成 async 的原因：每轮对话可能有几十次工具调用，每次多等 600 ms 是能感觉到的卡顿。每个会话里仍然同步的 Hook 中，SessionStart 一次会话只跑一次，UserPromptSubmit 一轮只跑一次，PreToolUse 在 Read 这类调用上每次都会付这笔启动开销，这是 File Read Gate 必须付出的代价。
 
 ### 其他工程细节
 

@@ -1,7 +1,7 @@
 ---
 title: "第 15 章：业界 Agent Memory 方案调研"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KDaYw1QwniHcpSk1QHacu3GOn3e"
-last_synced: "2026-10-13T11:43:10+08:00"
+last_synced: "2026-10-28T15:07:24+08:00"
 ---
 
 ## OpenAI Memory / ChatGPT Memory 机制分析
@@ -240,7 +240,7 @@ print('Zep server running. Add messages via client.memory.add_memory()')
 
 ```bash
 # Cognee 依赖 Neo4j（知识图谱数据库），门槛较高
-# 如果不想装 Neo4j，可以用 Cognee 的内存模式体验核心概念
+# 这段只验证安装是否成功；真正运行需要配置 LLM Key 和图数据库
 pip install cognee
 python3 -c "
 import cognee
@@ -296,7 +296,7 @@ graph TB
 
 ### 构建企业级平台时的关键借鉴
 
-1. **来自 Mem0**：多层记忆分离（个人/团队/组织）
+1. **来自 Mem0**：记忆分层。Mem0 分 user / agent / session 三层，放到组织里对应的是个人 / 团队 / 组织
 2. **来自 Zep**：时间衰减与自动摘要
 3. **来自 MemGPT**：Agent 应有"主动管理记忆"的能力
 4. **来自 Cognee**：知识图谱做关系追溯和冲突检测

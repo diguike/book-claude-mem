@@ -1,7 +1,7 @@
 ---
 title: 前言
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KAKQwYDjRiqn9DklFT4cwrpVnOf"
-last_synced: "2026-10-27T11:41:08+08:00"
+last_synced: "2026-10-28T15:01:02+08:00"
 ---
 
 > **配套资源**  
@@ -9,7 +9,7 @@ last_synced: "2026-10-27T11:41:08+08:00"
 > 在线阅读 · [inferloop.dev/claude-mem](https://inferloop.dev/claude-mem)
 
 > **For English readers**  
-> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (revised for v13.35.0, October 2026): hooks, the worker service, storage, search, building a mini version from scratch, and the newer server runtime, multi-host adapters and cross-device sync. It is written in Chinese; browser translation works fine for reading it, and the code is on [GitHub](https://github.com/diguike/book-claude-mem). New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
+> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (as of v13.35.0, October 2026): hooks, the worker service, storage, search, building a mini version from scratch, and the newer server runtime, multi-host adapters and cross-device sync. It is written in Chinese; the English edition is on [GitHub](https://github.com/diguike/book-claude-mem/tree/main/en), along with all the code. New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
 
 ## 为什么写这本书
 
@@ -20,17 +20,6 @@ last_synced: "2026-10-27T11:41:08+08:00"
 我第一次注意到 claude-mem 时，它已经在 GitHub 上积累了超过 10,000 stars——一个 Claude Code 的记忆插件能做到这个量级，说明痛点确实普遍。但真正让我产生写书冲动的不是 star 数，而是读完源码后的感受：它不是一个"把东西存起来再找出来"的 CRUD 应用，而是在解决一个更深层的问题——如何在有限的上下文窗口里，以最高效率向 Agent 提供它真正需要的信息。
 
 claude-mem 的 Progressive Disclosure（渐进式信息披露）设计、基于 Hook 的非侵入式架构、3 层搜索工作流，这些设计背后是对 LLM 注意力机制的深刻理解，对任何做 Agent 开发的工程师都有直接价值——不管你用不用 claude-mem 本身。
-
-## 第二版修订说明
-
-第一版基于 claude-mem v12.6.2。之后 claude-mem 官方的学习页面 [cmem.ai/learn](https://cmem.ai/learn) 推荐了这本书，而项目本身在一个大版本里变化很大：GitHub star 从我第一次注意到它时的一万出头涨到了 99,871（2026-10-12），许可证从 AGPL-3.0 改为 Apache-2.0，内部几乎每一层都重写过。
-
-这一版以 v13.35.0（2026-10-08 发布）为基线全面修订：
-
-- **架构变了的地方全部重写**：Hook 不再直接请求 Worker，而是先落盘到 spool；Worker 删掉了持久化队列，改用内存缓冲；开场上下文改为预渲染缓存；MCP 工具从 13 个增加到 24 个（Worker 运行时对模型暴露其中 19 个），检索改成强制分步的 `mem_search` 协议。第 4 到 11 章按新源码重新讲解
-- **设想变成了现实的地方改写为源码分析**：第一版第 16、17 章是“把插件改造成平台”的设想，v13 官方做出了 Server 运行时，这两章改为拿官方实现对照当初的设想
-- **新增两章**：第 18 章讲一份记忆怎么接入 17 种 Agent 宿主，第 19 章讲跨设备同步。原第 18 章前沿探索顺延为第 20 章
-- **每一处论断回到源码核对，每个示例在 Node.js 24 上重新跑通**。第 16 章的结论来自一次本地实跑（Postgres + Redis + 假的模型 provider），其中包括几处源码注释与实现不符的地方，书里如实写明
 
 ## 什么是 Claude Code
 
@@ -48,7 +37,11 @@ Claude Code 是 Anthropic 官方的命令行 AI 编程工具，直接运行在 s
 
 ## 版本与范围
 
-本书基于 claude-mem v13.35.0，不复述用户手册。claude-mem 迭代很快，行号和配置项会随版本变化，书的重心放在相对稳定的架构设计与工程取舍上。
+本书基于 claude-mem v13.35.0（2026-10-08 发布），不复述用户手册。截至 2026-10-12，项目在 GitHub 上有 99,871 个 star；许可证从 v13.0.0 起由 AGPL-3.0 改为 Apache-2.0。claude-mem 官方的学习页面 [cmem.ai/learn](https://cmem.ai/learn) 推荐了这本书。
+
+claude-mem 迭代很快，行号和配置项会随版本变化，书的重心放在相对稳定的架构设计与工程取舍上。书中每一处论断都回到 v13.35.0 源码核对过，每个示例都在 Node.js 24 上跑通。第 16 章的结论来自一次本地实跑（Postgres + Redis + 假的模型 provider），实跑中发现几处源码注释与实现不符，书里如实写明。
+
+书中 v13.30.0 这类版本号、#4415 这类编号，分别指 claude-mem 的发布版本和它 GitHub 仓库 [thedotmack/claude-mem](https://github.com/thedotmack/claude-mem) 里的 PR / issue，可以据此查到某条论断背后的改动。
 
 另有两处边界：第五部分讲的 Server 运行时在官方文档里仍标注为 Beta；第 17 章的团队权限、审计防篡改等内容属于 claude-mem 商业版保留的区域，书中给的是自建设计，章节里都有标注，这部分代码不能直接用于生产部署。
 

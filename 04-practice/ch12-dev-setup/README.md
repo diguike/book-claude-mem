@@ -1,7 +1,7 @@
 ---
 title: "第 12 章：开发环境搭建"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/PPq1wgX9si8JqykA1UJcvVngn3e"
-last_synced: "2026-10-13T11:42:45+08:00"
+last_synced: "2026-10-28T15:06:10+08:00"
 ---
 
 ## Claude Code Plugin 开发基础
@@ -50,7 +50,7 @@ claude plugin validate ./plugin
 claude --plugin-dir ./plugin
 ```
 
-`claude plugin validate` 会指出常见问题，比如缺少作者信息、命令里的 `${CLAUDE_PLUGIN_ROOT}` 没加引号（路径含空格时命令会被拆开）。本书在 Claude Code 2.1.296 上验证过这两个命令。旧版书介绍的“把插件目录软链到 `~/.claude/plugins/`”的做法不再推荐。
+`claude plugin validate` 会指出常见问题，比如缺少作者信息、命令里的 `${CLAUDE_PLUGIN_ROOT}` 没加引号（路径含空格时命令会被拆开）。本书在 Claude Code 2.1.296 上验证过这两个命令。一些旧教程介绍的“把插件目录软链到 `~/.claude/plugins/`”的做法不再推荐。
 
 ### Hook 注册
 
@@ -136,7 +136,7 @@ claude --debug
 
 **Hook 不执行**：matcher 区分大小写；事件名拼错时宿主会静默忽略（`PostToolUseFailure` 写成 `PostToolFailure` 不会报错）。先跑一遍 `claude plugin validate`。
 
-**输出被忽略**：stdout 必须只有一段合法 JSON。调试时顺手写的 `console.log`、某个库打到 stdout 的提示，都会让整段输出无效。stderr 不影响 stdout 的解析，所以不需要把 stderr 整个吞掉（旧版书和 claude-mem v12 都这么做过）；更好的做法是把诊断信息写进日志文件，claude-mem v13 用的是“执行期间缓冲 stderr、退出时丢弃”的方式（第 5 章）。
+**输出被忽略**：stdout 必须只有一段合法 JSON。调试时顺手写的 `console.log`、某个库打到 stdout 的提示，都会让整段输出无效。stderr 不影响 stdout 的解析，所以不需要把 stderr 整个吞掉（claude-mem v12 就这么做过）；更好的做法是把诊断信息写进日志文件，claude-mem v13 用的是“执行期间缓冲 stderr、退出时丢弃”的方式（第 5 章）。
 
 **注入的内容模型没收到**：SessionStart 的输出超过 10,000 字符时，Claude Code 会把整段换成一个预览，模型实际收不到任何内容，Hook 却显示成功。注入前先量长度（第 8 章）。
 
@@ -181,7 +181,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 await server.connect(new StdioServerTransport());
 ```
 
-`setRequestHandler` 的第一个参数必须是 SDK 导出的 Schema 对象（`ListToolsRequestSchema`、`CallToolRequestSchema`），SDK 从里面读出方法名。旧版书写的 `server.setRequestHandler('tools/list', ...)` 在当前 SDK 上会抛出 `Schema is missing a method literal`。
+`setRequestHandler` 的第一个参数必须是 SDK 导出的 Schema 对象（`ListToolsRequestSchema`、`CallToolRequestSchema`），SDK 从里面读出方法名。传字符串，比如 `server.setRequestHandler('tools/list', ...)`，在当前 SDK 上会抛出 `Schema is missing a method literal`。
 
 在插件目录的 `.mcp.json` 里注册：
 
@@ -235,7 +235,7 @@ db.prepare('INSERT INTO observations (title, narrative) VALUES (?, ?)').run('修
 const rows = db.prepare('SELECT * FROM observations WHERE title LIKE ?').all('%超时%');
 ```
 
-`busy_timeout` 在旧版书里没有提。一个记忆插件至少有三类进程会同时打开数据库：Hook、MCP Server、后台 Worker。不设它，写锁冲突时会立刻抛 `SQLITE_BUSY`；claude-mem 在 v13.10.2 补上了这一项。
+`busy_timeout` 很容易被漏掉。一个记忆插件至少有三类进程会同时打开数据库：Hook、MCP Server、后台 Worker。不设它，写锁冲突时会立刻抛 `SQLITE_BUSY`；claude-mem 在 v13.10.2 补上了这一项。
 
 ### FTS5 与中文
 

@@ -1,7 +1,7 @@
 ---
 title: "第 6 章：Worker Service — 异步处理引擎"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/KPeiwyWKwid6c8kC5WOcvX6TnFe"
-last_synced: "2026-10-13T11:42:02+08:00"
+last_synced: "2026-10-28T15:11:51+08:00"
 ---
 
 ## 为什么需要后台 Worker
@@ -194,7 +194,7 @@ Hook 读一次这个流就知道 Worker 是在启动中、已就绪还是启动�
 - Worker 启动时扫描一遍进程表，找出不属于任何 Worker 的 `chroma-mcp` 进程树并终止（`src/supervisor/orphan-chroma-sweep.ts`）。注释里记录过有机器积累了 619 和 808 对这样的孤儿进程
 - MCP Server 每 30 秒检查一次父进程是否还在，父进程退出就自行退出
 
-旧版书里写的“每 5 分钟执行一次的 Orphan Reaper”出自上游的 `docs/architecture-overview.md`，在 v12.6.2 和 v13.35.0 的代码里都找不到对应实现，这里以代码为准。
+上游的 `docs/architecture-overview.md` 里写有一个“每 5 分钟执行一次的 Orphan Reaper”，在 v12.6.2 和 v13.35.0 的代码里都找不到对应实现，这里以代码为准。
 
 ## 优雅关闭：六步加一个硬期限
 
@@ -214,7 +214,7 @@ export async function performGracefulShutdown(config: GracefulShutdownConfig): P
 
 `closeHttpServer` 先 `closeAllConnections()` 再 `close()`；Windows 上前后各等 500 ms 让系统回收端口。v13.12.4 修了一个细节：`server.close()` 返回 `ERR_SERVER_NOT_RUNNING` 时视为已经关闭，不再当作致命错误跳过后面五步（这曾导致 Windows 上端口一直被占）。
 
-旧版书指出过这个流程的两个缺口：没有超时兜底，也不清理 PID 文件。v13.5.6 把外层调用改成了 `src/services/worker-shutdown.ts` 里的 `runShutdownSequence()`，补上了这两点，如图 6-3 所示。
+v12 的这个流程有两个缺口：没有超时兜底，也不清理 PID 文件。v13.5.6 把外层调用改成了 `src/services/worker-shutdown.ts` 里的 `runShutdownSequence()`，补上了这两点，如图 6-3 所示。
 
 ```mermaid
 flowchart TB

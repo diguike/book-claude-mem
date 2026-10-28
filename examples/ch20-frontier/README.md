@@ -6,7 +6,7 @@
 |------|------|
 | A. 最新的 N 条 | claude-mem 默认（`CLAUDE_MEM_REINFORCE_ALPHA=0`） |
 | B. ACT-R 强度排序 | 逐行移植 claude-mem v13.35.0 `src/services/reinforcement/rank.ts` 的 `blendedScore` / `rankByStrength` |
-| C. 指数衰减保留分数 | 本书第一版第 18 章的设想（按类型加权，访问次数用强化次数代替） |
+| C. 指数衰减保留分数 | 朴素方案（按类型加权，180 天时间常数，访问次数用强化次数代替） |
 
 ```bash
 npm install

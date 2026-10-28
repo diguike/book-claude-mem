@@ -1,7 +1,7 @@
 ---
 title: "第 4 章：系统架构总览"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/SbaJwOHwNijd72km1c6cxjW2n2d"
-last_synced: "2026-10-13T11:45:25+08:00"
+last_synced: "2026-10-28T15:02:42+08:00"
 ---
 
 本章以 claude-mem v13.35.0 为准。v12 到 v13 之间，系统的四层骨架没有变，变的是层与层之间怎么交接：写入从“Hook 直接 POST 给 Worker”改成“Hook 落盘、Worker 来取”，读取从“每次现查”改成“Worker 预先渲染、Hook 直接读文件”。理解了这两处交接，后面几章的细节都能挂到正确的位置上。
@@ -73,7 +73,7 @@ Claude Code 是闭源程序，claude-mem 只能通过它暴露的两个扩展点
 
 **MCP Client**。claude-mem 注册了一个名为 `mcp-search` 的 MCP Server，在本地 Worker 运行时下向模型暴露 19 个工具（第 9 章）。
 
-旧版书里有一句“claude-mem 只能观察和注入，不能拦截”。v13.32 之后这句话需要加一个例外：PreToolUse 钩子在满足一组严格条件时会返回 `permissionDecision: 'deny'`，拒绝 Claude 整文件读取一个大代码文件，改为引导它走结构化的局部读取（File Read Gate，第 8 章）。这是 claude-mem 目前唯一一处主动改变宿主行为的地方。
+过去 claude-mem 只能观察和注入，不能拦截。v13.32 之后有了一个例外：PreToolUse 钩子在满足一组严格条件时会返回 `permissionDecision: 'deny'`，拒绝 Claude 整文件读取一个大代码文件，改为引导它走结构化的局部读取（File Read Gate，第 8 章）。这是 claude-mem 目前唯一一处主动改变宿主行为的地方。
 
 宿主也不再只有 Claude Code。`npx claude-mem install` 的宿主列表里有 17 个选项，从 Codex CLI、Cursor、Windsurf 到 Pi、DeepSeek Harness、OpenCode。不同宿主接入方式差别很大，第 18 章专门讲适配层。
 
@@ -147,7 +147,7 @@ export function spoolHookEvent<K extends HookSpoolKind>(kind: K, payload: HookSp
 }
 ```
 
-文件写在 `~/.claude-mem/state/hook-spool/` 下，一个事件一个文件。文件名就是去重键：有 `tool_use_id` 时是“会话哈希-工具调用 ID”，没有时是事件内容的 SHA-256。同一个事件被宿主重复投递，只会覆盖同一个文件。下面是本书在本地跑出来的一个真实条目：
+文件写在 `~/.claude-mem/state/hook-spool/` 下，一个事件一个文件。文件名就是去重键：有 `tool_use_id` 时是“会话哈希-工具调用 ID”，没有时是事件内容的 SHA-256。同一个事件被宿主重复投递，只会覆盖同一个文件。下面是第 5 章的测试命令用合成输入写出的一个条目：
 
 ```json
 {
@@ -243,7 +243,7 @@ sequenceDiagram
 
 *图 4-2：v13.35.0 一次会话中八个 Hook 的触发时序*
 
-图中能看出 v13 的取舍：只有三类 Hook 仍是同步的。SessionStart 的 context 必须同步，因为它的输出要进模型上下文；UserPromptSubmit 要先登记本轮 prompt，后续观察才能挂到正确的轮次上；PreToolUse 需要同步才能拒绝一次读取。其余写操作都改成了“落盘即返回”，而且是 async，Claude Code 根本不等。
+图中能看出 v13 的取舍：除了启动时运行一次的 Setup，只有三类 Hook 仍是同步的。SessionStart 的 context 必须同步，因为它的输出要进模型上下文；UserPromptSubmit 要先登记本轮 prompt，后续观察才能挂到正确的轮次上；PreToolUse 需要同步才能拒绝一次读取。其余写操作都改成了“落盘即返回”，而且是 async，Claude Code 根本不等。
 
 ## 数据流全链路
 

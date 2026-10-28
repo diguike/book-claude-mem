@@ -89,7 +89,7 @@ last_synced: ""
 
 ### [第 8 章：Progressive Disclosure — 渐进式信息披露](03-mechanisms/ch08-progressive-disclosure/README.md)
 - 8.1 设计哲学：让 Agent 自己决定看什么
-- 8.2 一次会话里的四层
+- 8.2 一次会话里的五层
 - 8.3 Layer 0：工作状态先于记忆
 - 8.4 Layer 1：记忆索引
 - 8.5 Layer 2 和 Layer 3：被强制执行的三步搜索
@@ -180,7 +180,7 @@ last_synced: ""
 - 16.5 故障时会发生什么
 - 16.6 检索：tsvector，以及还没用上的 embedding
 - 16.7 从 worker 迁到 Server
-- 16.8 和第一版设想的对照
+- 16.8 和直觉方案的对照
 - 配套代码：`examples/ch16-platform-arch/` — 多租户记忆服务的最小模型：复合外键隔离、发件箱、确定性任务 ID、运维重试
 
 ### [第 17 章：企业级特性：开源版给了什么，还要补什么](05-enterprise/ch17-enterprise-features/README.md)

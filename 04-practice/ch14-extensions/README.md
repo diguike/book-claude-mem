@@ -1,7 +1,7 @@
 ---
 title: "第 14 章：进阶功能扩展"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/ALTcwXGZeisixDkyuPccFoVlnUf"
-last_synced: "2026-10-13T11:43:03+08:00"
+last_synced: "2026-10-28T15:07:03+08:00"
 ---
 
 ## 扩展全景
@@ -107,7 +107,7 @@ function truncate(text: string, max = 4000): string {
 }
 ```
 
-三个细节值得照搬：允许模型说“这条不值得记”（`skip`），否则每次 `ls` 都会变成一条记忆；超长字段保留头尾，因为路径、命令通常在开头，错误信息通常在结尾；type 只列真正的类型，旧版书的提示里混进了 `how-it-works`，那是 concept。
+三个细节值得照搬：允许模型说“这条不值得记”（`skip`），否则每次 `ls` 都会变成一条记忆；超长字段保留头尾，因为路径、命令通常在开头，错误信息通常在结尾；type 只列真正的类型，像 `how-it-works` 这样的 concept 不该混进来。
 
 ## 实现 Timeline 时间线视图
 
@@ -118,7 +118,7 @@ Timeline 提供某条 Observation 前后的上下文：
 getTimeline(anchorId: number, before = 3, after = 3) {
   const anchor = this.db.prepare('SELECT created_at, project FROM observations WHERE id = ?').get(anchorId) as
     { created_at: number; project: string } | undefined;
-  if (!anchor) return { before: [], anchor: null, after: [] };
+  if (!anchor) return { before: [], anchorId: null, after: [] };
 
   // 时间相同的记录用 id 打破平局，否则同一秒写入的几条会被漏掉或重复（claude-mem #4104 修过同类问题）
   const beforeRows = this.db.prepare(`
@@ -279,7 +279,7 @@ export function projectNameOf(cwd: string): string {
 }
 ```
 
-旧版书推荐过“先读 `package.json` 的 `name` 字段”。claude-mem 没有这样做，原因不难想：monorepo 里每个子包都有自己的 `name`，同一个仓库会被拆成十几个项目；`name` 改一次，历史记忆就断了。用 git 根目录作为默认、让用户显式声明例外，是更稳定的选择。
+“先读 `package.json` 的 `name` 字段”看起来很自然，claude-mem 却没有这样做，原因是：monorepo 里每个子包都有自己的 `name`，同一个仓库会被拆成十几个项目；`name` 改一次，历史记忆就断了。用 git 根目录作为默认、让用户显式声明例外，是更稳定的选择。
 
 `execFileSync` 而不是 `execSync`：不经过 shell，目录名里有特殊字符也不会被解释。Hook 每次都会调用它，要注意多启动一个 git 进程的耗时。
 

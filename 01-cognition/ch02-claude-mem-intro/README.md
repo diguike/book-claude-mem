@@ -1,7 +1,7 @@
 ---
 title: "第 2 章：认识 claude-mem — 能力全景与快速上手"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/R7FYw8Wf2iRdvFktJE3cmi6nn6d"
-last_synced: "2026-10-13T11:41:14+08:00"
+last_synced: "2026-10-28T15:01:32+08:00"
 ---
 
 本书以 claude-mem v13.35.0（2026-10-08 发布）为准，许可证为 Apache-2.0（v13.0.0 起从 AGPL-3.0 改为 Apache-2.0）。
@@ -331,7 +331,7 @@ claude-mem 默认对所有项目生效。临时实验目录、个人笔记目录
 }
 ```
 
-被排除的目录既不记录观察，也不在会话开始时注入上下文。旧版书提到的 `.claude-mem-ignore` 文件在 claude-mem 里并不存在。
+被排除的目录既不记录观察，也不在会话开始时注入上下文。claude-mem 没有 `.claude-mem-ignore` 这类忽略文件，排除规则只能写在设置里。
 
 ### 项目怎么识别
 

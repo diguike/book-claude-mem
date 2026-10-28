@@ -1,7 +1,7 @@
 ---
 title: "第 9 章：MCP 搜索架构"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Q4jkw0bO4iqY2YknDyMcpHx4ntg"
-last_synced: "2026-10-13T11:42:27+08:00"
+last_synced: "2026-10-28T15:05:23+08:00"
 ---
 
 ## MCP (Model Context Protocol) 入门
@@ -117,7 +117,7 @@ v13.33.0 给 14 个工具加上了 MCP 的 `readOnlyHint` 注解：
 const READ_ONLY_TOOL_ANNOTATIONS = { readOnlyHint: true } as const;
 ```
 
-Claude Code 的 plan mode 下，只有声明了只读的工具可以不经确认直接运行。在此之前，`claude -p` 这类非交互会话里 claude-mem 的检索工具会被直接拒绝；更麻烦的是 File Read Gate 会把 Agent 引向 `smart_outline`，而这个工具在 plan mode 里用不了。写入类工具（`save_memory`、`work_state_write`、corpus 的构建和查询）不声明只读，仍然需要确认。`query_corpus` 不算只读，因为它会往知识库会话里追加对话。
+Claude Code 的 plan mode 下，只有声明了只读的工具可以不经确认直接运行。在此之前，plan mode 和 `claude -p` 这类没人回应确认提示的非交互运行里，claude-mem 的检索工具会被直接拒绝；更麻烦的是 File Read Gate 会把 Agent 引向 `smart_outline`，而这个工具在 plan mode 里用不了。写入类工具（`save_memory`、`work_state_write`、corpus 的构建和查询）不声明只读，仍然需要确认。`query_corpus` 不算只读，因为它会往知识库会话里追加对话。
 
 ## 运行时感知的工具列表
 
@@ -199,7 +199,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 await server.connect(new StdioServerTransport());
 ```
 
-注意 `setRequestHandler` 的第一个参数是 SDK 导出的 Schema 对象，不是 `'tools/list'` 这样的字符串。当前版本的 `@modelcontextprotocol/sdk` 会从 Schema 里读出方法名，传字符串会在运行时抛出 `Schema is missing a method literal`。本书第 13 章 mini-mem 的旧版代码就犯过这个错误，这次修订已经改正。
+注意 `setRequestHandler` 的第一个参数是 SDK 导出的 Schema 对象，不是 `'tools/list'` 这样的字符串。当前版本的 `@modelcontextprotocol/sdk` 会从 Schema 里读出方法名，传字符串会在运行时抛出 `Schema is missing a method literal`。这个错误很容易犯，而且写成 `as any` 时类型检查也发现不了（第 13 章）。
 
 除了翻译请求，MCP Server 还做了几件与可靠性有关的事：
 

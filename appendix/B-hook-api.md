@@ -1,7 +1,7 @@
 ---
 title: "附录 B：Claude Code Hook API 速查"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/SE3OwrStlihD2WkVQAUc61oRnVb"
-last_synced: "2026-10-13T11:44:05+08:00"
+last_synced: "2026-10-28T15:00:20+08:00"
 ---
 
 本附录汇总写一个记忆插件时会用到的 Hook 接口，在 Claude Code 2.1.296 上验证，claude-mem 的配置以 v13.35.0 为准。完整规范见官方文档 [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks)。
@@ -10,7 +10,7 @@ last_synced: "2026-10-13T11:44:05+08:00"
 
 | 事件 | 触发时机 | stdin 主要字段 | 常用输出 | claude-mem 的用法 |
 |------|---------|---------------|---------|------------------|
-| Setup | 插件安装或更新后 | 通用字段 | 无 | 依赖自愈（300 秒） |
+| Setup | 每次 Claude Code 启动时，会话开始前 | 通用字段 | 无 | 依赖自愈（300 秒） |
 | SessionStart | 会话开始；`source` 为 `startup` / `resume` / `clear` / `compact` | `source` | `additionalContext` 注入上下文 | 一个异步拉起 Worker，一个同步注入；`resume` 不注入 |
 | UserPromptSubmit | 用户提交 prompt | `prompt` | 退出码 2 会丢弃 prompt | 登记本轮 prompt（15 秒） |
 | PreToolUse | 工具调用前 | `tool_name`、`tool_input`、`tool_use_id` | `additionalContext`；`permissionDecision: 'deny'` | 文件上下文与 File Read Gate（15 秒） |

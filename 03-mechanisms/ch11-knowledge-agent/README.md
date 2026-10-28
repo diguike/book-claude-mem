@@ -1,7 +1,7 @@
 ---
 title: "第 11 章：Knowledge Agent — 知识库构建"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/LVFowV8KciUj8CkDuF3cyVosnCh"
-last_synced: "2026-10-13T11:42:42+08:00"
+last_synced: "2026-10-28T15:05:59+08:00"
 ---
 
 ## 从 Observations 到 Corpus
@@ -12,7 +12,7 @@ Knowledge Agent 做的事情是把散落在时间线上的观察按条件挑出�
 
 ## Corpus 是一个 JSON 文件
 
-旧版书说 Corpus “不是摘要文本，而是一组 Observation ID 的集合定义”。实际的存储比这更完整。每个 Corpus 是 `~/.claude-mem/corpora/<名称>.corpus.json` 这样一个文件（`CorpusStore`），结构如下：
+Corpus 存的不只是一组 Observation ID。每个 Corpus 是 `~/.claude-mem/corpora/<名称>.corpus.json` 这样一个文件（`CorpusStore`），结构如下：
 
 ```typescript
 // src/services/worker/knowledge/types.ts（v13.35.0，字段节选）
@@ -133,7 +133,7 @@ query_corpus name="hooks-expertise"
 | 某段时间的工作 | `dateStart="2026-09-01" dateEnd="2026-09-30"` |
 | 某类问题的修复模式 | `types="bugfix" query="timeout"` |
 
-组合条件比单一条件更聚焦：`types="decision" concepts="trade-off"` 找的是“有明确取舍的决策”。旧版书在这里写过 `types="decision,trade-off"`，`trade-off` 是 concept 不是 type，按 type 过滤不会命中任何记录。
+组合条件比单一条件更聚焦：`types="decision" concepts="trade-off"` 找的是“有明确取舍的决策”。不要写成 `types="decision,trade-off"`：`trade-off` 是 concept 不是 type，按 type 过滤不会命中任何记录。
 
 构建完先用 `list_corpora` 看一眼 `observation_count` 和 `token_estimate`，再决定要不要 prime。
 
@@ -176,7 +176,7 @@ stateDiagram-v2
     Built --> Built: rebuild_corpus
     Stale: 快照已更新，会话仍是旧内容
     Stale --> Primed: reprime_corpus
-    Primed --> Built: rebuild 被拒（缩水过半且未 force）时保持原状
+    Primed --> Primed: rebuild 被拒（缩水过半且未 force），保持原状
 ```
 
 *图 11-1：Corpus 的生命周期（`src/services/worker/knowledge/` 与 `CorpusRoutes.ts`）*

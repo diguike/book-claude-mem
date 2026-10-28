@@ -1,6 +1,6 @@
 # mini-mem — 简版 Agent Memory Plugin
 
-第 13 章配套的完整可运行项目（1.1.0，按 claude-mem v13 的经验修订）。实现了 claude-mem 的核心闭环：
+第 13 章配套的完整可运行项目（1.1.0，吸收了 claude-mem v13 的经验）。实现了 claude-mem 的核心闭环：
 
 ```
 Hook 捕获（含失败的调用）→ SQLite 存储 → FTS5 / 子串搜索 → MCP 暴露 → SessionStart 注入

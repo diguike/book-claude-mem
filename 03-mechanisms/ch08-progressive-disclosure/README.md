@@ -1,7 +1,7 @@
 ---
 title: "第 8 章：Progressive Disclosure — 渐进式信息披露"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/G7ZiwrG2bi7sxUkEx8ycTZlwnKh"
-last_synced: "2026-10-13T11:42:19+08:00"
+last_synced: "2026-10-28T15:05:01+08:00"
 ---
 
 ## 设计哲学：让 Agent 自己决定看什么
@@ -23,7 +23,7 @@ Progressive Disclosure：
 
 从 v12 到 v13，这个原则没有变，变的是执行力度。v12 主要靠一段写在工具描述里的“工作流说明”劝模型按顺序来；v13 在三个层面把它做成了硬约束：注入的上下文有测量出来的字符上限，搜索工具用服务端状态机强制分步，读代码文件时有一道闸门挡住整文件读取。本章按“Agent 在一次会话里依次看到什么”的顺序讲这几层。
 
-## 一次会话里的四层
+## 一次会话里的五层
 
 图 8-1 是一次会话从开始到取到原始证据的完整路径。
 
@@ -48,6 +48,8 @@ sequenceDiagram
 ```
 
 *图 8-1：v13 的分层披露路径。系统只主动推送 Layer 0 和 Layer 1，之后每一步都由 Agent 发起*
+
+Layer 0 和 Layer 1 随开场上下文一起送达；Layer 2 是 `mem_search` 的索引和时间线两步，Layer 3 是它的详情一步，Layer 4 是一条观察背后的原始工具输出。
 
 ## Layer 0：工作状态先于记忆
 
@@ -79,7 +81,7 @@ Still open:
 
 ### 真实的注入格式
 
-旧版书里展示的索引是一张带 `Tokens` 列、按文件分组的 Markdown 表格。这个格式在 claude-mem 里确实存在，但用在“为某个目录生成 CLAUDE.md”的功能里（`src/cli/claude-md-commands.ts`），不是 SessionStart 注入的内容。本书用同一组测试数据分别在 v12.6.2 和 v13.35.0 上调用 `generateContext()`，两个版本输出的都是下面这种紧凑格式。v13.35.0 的输出：
+你可能见过一种带 `Tokens` 列、按文件分组的 Markdown 表格形式的索引。这个格式在 claude-mem 里确实存在，但用在“为某个目录生成 CLAUDE.md”的功能里（`src/cli/claude-md-commands.ts`），不是 SessionStart 注入的内容。本书用同一组测试数据分别在 v12.6.2 和 v13.35.0 上调用 `generateContext()`，两个版本输出的都是下面这种紧凑格式。v13.35.0 的输出：
 
 ```
 # [my-app] recent context, 2026-10-12 3:45pm GMT+8
@@ -121,7 +123,7 @@ Access 7k tokens of past work via get_observations([IDs]) or mem-search skill.
 
 ### Token 成本：从逐行显示到一行汇总
 
-旧版书说索引的每一行末尾都有一个 `~180` 这样的 token 估算。在 SessionStart 的注入里，这个列默认是关闭的，取而代之的是一行汇总：
+索引的每一行末尾可以带一个 `~180` 这样的 token 估算，但在 SessionStart 的注入里这一列默认关闭，取而代之的是一行汇总：
 
 ```
 Stats: 4 obs (54t read) | 6,600t work | 99% savings
@@ -151,7 +153,7 @@ Claude Code 对 Hook 输出有一个容易被忽略的限制。`src/services/con
 4. 会话摘要数量减半，可以反复
 5. 观察条数减半，可以反复
 
-每次丢的都是整条，不会把一条截一半，所以无论怎么裁，输出都是格式完整的，标题行、页脚和至少一条观察总会保留。工作状态段放在最前面，它自己的 3,000 字符上限保证了记忆至少还有 7,000 字符可用。
+每次丢的都是整条，不会把一条截一半，所以无论怎么裁，输出都是格式完整的，标题行、页脚和至少一条观察总会保留。工作状态段放在最前面，它自己的 3,000 字符上限保证了开场索引至少还有 7,000 字符可用。
 
 ## Layer 2 和 Layer 3：被强制执行的三步搜索
 
@@ -280,11 +282,11 @@ The titles below are history from earlier sessions, not the file's current conte
 | security_note | ⚷ | 值得记录但不紧急的安全信息 |
 | sensitive | ⊘ | 不算私密、但不应流入其他内容的信息（内部 URL、未发布计划、客户名等） |
 
-v12.6.2 用的是彩色 emoji。v13.13 起改成了这些 BMP 范围内的符号，原因是 emoji 在某些路径上会产生 UTF-16 代理对问题，曾导致注入的上下文出错（#2787）。v12.6.2 的 `code.json` 其实已经有 8 种类型（包括 `security_alert` 和 `security_note`），旧版书只列了 6 种。
+v12.6.2 用的是彩色 emoji。v13.13 起改成了这些 BMP 范围内的符号，原因是 emoji 在某些路径上会产生 UTF-16 代理对问题，曾导致注入的上下文出错（#2787）。v12.6.2 的 `code.json` 已经有 8 种类型（包括 `security_alert` 和 `security_note`）。
 
 **concept** 是另一个维度，共 7 个：how-it-works、why-it-exists、what-changed、problem-solution、gotcha、pattern、trade-off。它不显示在索引里，用于检索过滤（`concepts` 参数）和上下文过滤（`CLAUDE_MEM_CONTEXT_OBSERVATION_CONCEPTS`）。一条 bugfix 类型的观察可以同时带 problem-solution 和 gotcha 两个概念。
 
-符号的作用和旧版书分析的一样：比文字标签省 token，便于扫读，连续出现的同类符号能让 Agent 看出“那段时间在密集修 bug”。
+这些符号的作用：比文字标签省 token，便于扫读，连续出现的同类符号能让 Agent 看出“那段时间在密集修 bug”。
 
 ## 对比传统 RAG
 

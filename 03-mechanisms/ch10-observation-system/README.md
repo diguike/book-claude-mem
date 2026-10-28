@@ -1,7 +1,7 @@
 ---
 title: "第 10 章：Observation 系统"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/InRkwRHW1i6jnakDJxZcZj8nnXb"
-last_synced: "2026-10-13T11:42:35+08:00"
+last_synced: "2026-10-28T15:12:12+08:00"
 ---
 
 ## 记忆单元：一次工具调用
@@ -153,24 +153,24 @@ Never reply with an empty response, or with prose such as "Skipping" ...
 | `generated_by_model` | 系统 | 生成它的模型 |
 | `agent_type` / `agent_id` | 系统 | 子代理产生的观察会带上 |
 
-旧版书的字段表里有一个 `token_estimate` 列，`observations` 表里并没有这一列，token 估算是渲染索引时按字符数现算的（`TokenCalculator.calculateObservationTokens`）。
+`observations` 表里没有 `token_estimate` 列，token 估算是渲染索引时按字符数现算的（`TokenCalculator.calculateObservationTokens`）。
 
 type 回答“这条记录是什么性质的动作”，concept 回答“它属于哪类知识”，两者正交。concept 的 7 个取值是 how-it-works、why-it-exists、what-changed、problem-solution、gotcha、pattern、trade-off。
 
 ## 模式：同一套流水线，不同的记录标准
 
-上面提到的 type、concept 和所有提示词片段，都来自一个“模式”文件。`plugin/modes/` 下有 36 个：
+上面提到的 type、concept 和所有提示词片段，都来自一个“模式”文件。`plugin/modes/` 下有 35 个（另有一个供 law-study 模式使用的 `law-study-CLAUDE.md`）：
 
 - `code.json`：默认模式，面向软件开发
-- `code--zh.json`、`code--ja.json` 等 30 个语言变体：只覆盖输出语言相关的占位符和页脚，观察会用对应语言写成。中文读者可以在 `~/.claude-mem/settings.json` 里设 `"CLAUDE_MEM_MODE": "code--zh"`
+- `code--zh.json`、`code--ja.json` 等 29 个语言变体：只覆盖输出语言相关的占位符和页脚，观察会用对应语言写成。中文读者可以在 `~/.claude-mem/settings.json` 里设 `"CLAUDE_MEM_MODE": "code--zh"`
 - `code--chill.json`：更克制的记录标准
-- `email-investigation.json`、`law-study.json`、`meme-tokens.json`：非编程领域，有自己的类型和概念
+- `email-investigation.json`、`law-study.json`（另有 `law-study--chill.json`）、`meme-tokens.json`：非编程领域，有自己的类型和概念
 
 模式文件决定了观察者“记什么、不记什么、怎么分类”。以 `code.json` 的 `skip_guidance` 为例，它要求跳过空的状态检查、无错误的包安装、没有后续发现的文件列表，以及在评审、重试、轮询中反复确认的同一个事实：只在第一次确认时记录（#3352）。
 
 v13.13.1 加了一个 `/mode-creator` skill，可以通过对话为自己的领域生成一个模式。这意味着 claude-mem 的观察流水线本身是领域无关的，领域知识全部在模式文件里。
 
-v13.13.0 新增的 `sensitive` 类型是一个例子：它标记“不算私密、但不该流进其他内容”的信息，比如内部 URL、未发布的计划、客户名称。配置了 Telegram 机器人并打开逐条观察提醒（`CLAUDE_MEM_TELEGRAM_OBSERVATION_ALERTS_ENABLED=true`，默认关闭）后，这类观察会推送通知；触发的类型由 `CLAUDE_MEM_TELEGRAM_TRIGGER_TYPES` 决定，默认值是 `security_alert,sensitive`。同一个版本还修了一个问题：模式文件里每个 type 的描述从未被注入 prompt，观察者看到的类型说明只有一段旧文字，里面写着“6 种选项”，所以 `security_alert` 和 `security_note` 从 4 月起一直很少被产出。现在 `type_guidance` 列出了全部 9 种。
+v13.13.0 新增的 `sensitive` 类型是一个例子：它标记“不算私密、但不该流进其他内容”的信息，比如内部 URL、未发布的计划、客户名称。配置了 Telegram 机器人并打开逐条观察提醒（`CLAUDE_MEM_TELEGRAM_OBSERVATION_ALERTS_ENABLED=true`，默认关闭）后，这类观察会推送通知；触发的类型由 `CLAUDE_MEM_TELEGRAM_TRIGGER_TYPES` 决定，默认值是 `security_alert,sensitive`。同一个版本还修了一个问题：模式文件里每个 type 的描述从未被注入 prompt，观察者看到的类型说明只有一段旧文字，里面写着“6 种选项”，所以 `security_alert` 和 `security_note` 从 2026 年 4 月起一直很少被产出。现在 `type_guidance` 列出了全部 9 种。
 
 ## 文件关联
 
@@ -180,7 +180,7 @@ v13.13.0 新增的 `sensitive` 类型是一个例子：它标记“不算私密�
 - 搜索工具的 `files` 过滤，以及按文件搜索的 `/api/search/by-file`
 - 目录级 CLAUDE.md 生成（可选功能 `CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED`）：为每个目录生成一份按文件分组的观察列表
 
-旧版书说“Context Injection 时 Observation 按文件路径分组展示”，这在 SessionStart 注入里并不成立，那里是按天分组的；按文件分组的表格出现在上面第三项的目录级 CLAUDE.md 里。
+SessionStart 注入时观察按天分组，不按文件路径；按文件分组的表格出现在上面第三项的目录级 CLAUDE.md 里。
 
 ## 隐私：标签在 Worker 里剥离
 
@@ -190,7 +190,7 @@ v13.13.0 新增的 `sensitive` 类型是一个例子：它标记“不算私密�
 请帮我修改 <private>AWS_SECRET_KEY=AKIAIOSFODNN7EXAMPLE</private> 这个配置
 ```
 
-旧版书说剥离“发生在 Hook 层、数据到达 Worker 之前”。核对源码后发现，这在 v12.6.2 就不成立：工具输入输出的剥离在 Worker 的 `src/services/worker/http/shared.ts`（v12.6.2 L155-158、v13.35.0 L237-240），Hook 层只剥离了 Stop 事件里的最后一条回复。v13 的 hook-spool 让这一点更明确：Hook 把原始数据写进本机磁盘上的 spool 文件，Worker 取件后才剥离。
+剥离发生在 Worker 里，不在 Hook 层，v12.6.2 就已经如此：工具输入输出的剥离在 Worker 的 `src/services/worker/http/shared.ts`（v12.6.2 L155-158、v13.35.0 L237-240），Hook 层只剥离了 Stop 事件里的最后一条回复。v13 的 hook-spool 让这一点更明确：Hook 把原始数据写进本机磁盘上的 spool 文件，Worker 取件后才剥离。
 
 剥离的效果是整段删除，不是替换成 `[REDACTED]`。如果一条 prompt 整个被包在 `<private>` 里，这一轮的所有观察都会跳过（`PrivacyCheckValidator`）。
 
@@ -229,7 +229,7 @@ save_memory({ text: '这个项目的测试一律用 vitest，不要引入 jest',
 
 ## 使用信号：强化排序
 
-旧版书在这一节介绍了 `observation_feedback` 表和 viewed、fetched、cited 三种信号。第 7 章已经说明，这张表在实际运行的代码里从未存在。v13 里真正把“使用情况”变成排序依据的，是一套基于 ACT-R 的强化机制（`src/services/reinforcement/`）。
+第 7 章说过，带 viewed、fetched、cited 三种信号的 `observation_feedback` 表在实际运行的代码里从未存在。v13 里真正把“使用情况”变成排序依据的，是一套基于 ACT-R 的强化机制（`src/services/reinforcement/`）。
 
 ACT-R 是认知心理学里的一个记忆模型，它认为一条记忆的可提取程度取决于它被使用的次数和每次使用距今的时间，按幂律衰减。claude-mem 把“一条观察被再次确认”当作一次使用：完全重复的观察被唯一索引吸收时，或者第 0 级去重把新观察合并进旧记录时，都会把当天的日期追加到旧记录的 `reinforcement_dates`（最多 10 个，同一天只记一次）。
 
@@ -247,7 +247,7 @@ score = ln(1 + age_created^(-d) + ALPHA × Σ age_reinforcement^(-d))
 
 效果是：一条三个月前写下、昨天又被确认过一次的观察，可以重新进入 SessionStart 的窗口。纯按时间排序会把这类持久有效的知识埋掉。
 
-这份强化历史是设备本地的。云同步时 `reinforcement_dates`、`last_reinforced`、`occurrence_count` 都不传输，注释的说法是“每个副本按自己的确认来排序”（`src/services/sync/SyncApply.ts`）。第 20 章会把它和旧版书设计的遗忘曲线放在一起比较。
+这份强化历史是设备本地的。云同步时 `reinforcement_dates`、`last_reinforced`、`occurrence_count` 都不传输，注释的说法是“每个副本按自己的确认来排序”（`src/services/sync/SyncApply.ts`）。第 20 章会把它和一条更简单的指数遗忘曲线放在一起比较。
 
 ---
 

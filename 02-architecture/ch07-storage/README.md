@@ -1,7 +1,7 @@
 ---
 title: "第 7 章：存储层设计"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/L3xQwJNuMiOUxskqnLjc31Jvnvg"
-last_synced: "2026-10-13T11:42:12+08:00"
+last_synced: "2026-10-28T15:04:36+08:00"
 ---
 
 ## SQLite：从 6 张表到 21 张表
@@ -25,7 +25,7 @@ v13.35.0 新库里的表按用途分组：
 | 通知 | `telegram_wrapups` |
 | 遗留 | `pending_messages`（仍会创建，已无代码写入） |
 
-另有两张 FTS5 虚拟表 `observations_fts` 和 `session_summaries_fts`，由搜索层 `SessionSearch` 在构造时创建，不在上面的初始化流程里。旧版书里出现过一张 `observation_feedback` 表，用来记录 viewed、fetched、cited 三种使用信号。这张表只存在于 v12.6.2 一个已经不被调用的迁移文件和一篇架构文档里，实际建库流程从未创建过它，v13 中相关代码也已删除。第 10 章会介绍 v13 里真正承担“使用反馈”作用的机制。
+另有两张 FTS5 虚拟表 `observations_fts` 和 `session_summaries_fts`，由搜索层 `SessionSearch` 在构造时创建，不在上面的初始化流程里。有些介绍 claude-mem 的资料提到过一张 `observation_feedback` 表，用来记录 viewed、fetched、cited 三种使用信号。这张表只存在于 v12.6.2 一个已经不被调用的迁移文件和一篇架构文档里，实际建库流程从未创建过它，v13 中相关代码也已删除。第 10 章会介绍 v13 里真正承担“使用反馈”作用的机制。
 
 ### 核心表的字段
 
@@ -142,7 +142,7 @@ v13 的 schema 演进没有用独立的迁移文件，而是在 `SessionStore` �
 
 ### 为 SessionStart 建的索引
 
-SessionStart 要取“这个项目最新的 50 条观察”。v13.31.0 之前的查询会把项目（包括合并进来的 worktree）的所有观察全部取出再排序，一个 1.2 GB 的库每次会话开始要读约 21,700 行（63 MB），冷缓存时耗时 0.8–1.7 秒。v63、v64 两个版本加了按项目（大小写不敏感）和时间倒序的复合索引，以及覆盖索引，同样的查询读几百个页面即可，约 4 ms；解析项目别名的查询从读 7,499 个页面降到 355 个，约 9 ms：
+SessionStart 要取“这个项目最新的 50 条观察”。v13.31.0 之前的查询会把项目（包括合并进来的 worktree）的所有观察全部取出再排序，一个 1.2 GB 的库每次会话开始要读约 21,700 行（63 MB），冷缓存时耗时 0.8–1.7 秒。schema 版本 63、64 加了按项目（大小写不敏感）和时间倒序的复合索引，以及覆盖索引，同样的查询读几百个页面即可，约 4 ms；解析项目别名的查询从读 7,499 个页面降到 355 个，约 9 ms：
 
 ```sql
 CREATE INDEX idx_observations_project_nocase_recent
@@ -289,7 +289,7 @@ embedding 函数默认是 `default`，即本地运行的 all-MiniLM-L6-v2。这�
 
 ## 搜索路由：Chroma 优先，SQLite 补齐
 
-旧版书用一段“FTS5 和向量搜索并行执行、按分数合并去重”的代码来解释混合检索。这段代码和源码不符。v13.35.0 的 `SearchOrchestrator`（`src/services/worker/search/SearchOrchestrator.ts`）的路由逻辑如图 7-2 所示。
+混合检索常被描述成“FTS5 和向量搜索并行执行、按分数合并去重”，claude-mem 并不是这样做的。v13.35.0 的 `SearchOrchestrator`（`src/services/worker/search/SearchOrchestrator.ts`）的路由逻辑如图 7-2 所示。
 
 ```mermaid
 flowchart TD
@@ -310,7 +310,7 @@ flowchart TD
 几个要点：
 
 - 有查询文本时，语义检索是主路径，不是两路之一
-- Chroma 一次查询返回所有文档类型的 top-N。用中文查询时 prompt 文档常常挤占名额，或者日期、类型过滤把命中全部过滤掉，某个类别就会为空。这时用 SQLite 补齐这个类别（`supplementEmptyCategories`），而且补齐时不加“最近 90 天”的窗口，一条 90 天前的精确关键词命中正是这里要找回的东西
+- Chroma 一次查询返回所有文档类型的 top-N。源码注释提到，用中文等 CJK 文字查询时 prompt 文档常常挤占名额，或者日期、类型过滤把命中全部过滤掉，某个类别就会为空。这时用 SQLite 补齐这个类别（`supplementEmptyCategories`），而且补齐时不加“最近 90 天”的窗口，一条 90 天前的精确关键词命中正是这里要找回的东西
 - 名为 `HybridSearchStrategy` 的类确实存在，但它用在“按文件找观察”这类场景：先用 SQLite 按文件路径精确筛出候选 ID，再用 Chroma 给这些候选排序，最后按排序回表取数据
 
 两种检索的分工可以这样总结：

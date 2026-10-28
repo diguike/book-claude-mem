@@ -1,7 +1,7 @@
 ---
 title: "附录 F：参考资料"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Wzlhwc5YmiQthXkxZhScz1yKnkl"
-last_synced: "2026-10-13T11:44:18+08:00"
+last_synced: "2026-10-28T15:09:58+08:00"
 ---
 
 ## 核心项目
@@ -34,12 +34,12 @@ last_synced: "2026-10-13T11:44:18+08:00"
 ### ACT-R 与遗忘的幂律
 > Anderson, J. R., & Schooler, L. J. (1991). **Reflections of the Environment in Memory**. *Psychological Science*, 2(6), 396–408.
 
-记忆的可提取性随时间按幂律衰减，并随每次重复出现而增强。claude-mem 的强化排序（`src/services/reinforcement/`）按这一模型计算，衰减指数取 0.5。第 7、20 章。
+记忆的可提取性随时间按幂律衰减，并随每次重复出现而增强。claude-mem 的强化排序（`src/services/reinforcement/`）按这一模型计算，衰减指数取 0.5。第 7、10、20 章。
 
 ### Ebbinghaus 遗忘曲线
 > Ebbinghaus, H. (1885). **Über das Gedächtnis: Untersuchungen zur experimentellen Psychologie**. Leipzig: Duncker & Humblot.
 
-本书第一版的保留分数用的是指数衰减。第 20 章把它和 ACT-R 的幂律衰减放在一起比较。
+第 20 章把指数衰减的保留分数和 ACT-R 的幂律衰减放在一起比较。
 
 ### BM25 排序算法
 > Robertson, S., & Zaragoza, H. (2009). **The Probabilistic Relevance Framework: BM25 and Beyond**. *Foundations and Trends in Information Retrieval*, 3(4), 333–389.

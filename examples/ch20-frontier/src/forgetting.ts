@@ -2,7 +2,7 @@
  * 第 20 章：三种“遗忘”策略对比
  *  A. claude-mem 默认（CLAUDE_MEM_REINFORCE_ALPHA=0）：取最新的 N 条
  *  B. claude-mem ACT-R 排序（ALPHA>0）：逐行移植自 src/services/reinforcement/rank.ts（v13.35.0）
- *  C. 本书第一版设想的指数衰减保留分数
+ *  C. 朴素方案：指数衰减保留分数
  * 运行：npm run demo
  */
 
@@ -46,7 +46,7 @@ function rankByStrength(pool: Obs[], count: number, alpha: number, today: Date):
   return [...head, ...scored.slice(0, count - head.length).map(s => s.item)].sort((a, b) => b.created_at_epoch - a.created_at_epoch);
 }
 
-// ---- C：第一版设想（指数衰减，180 天时间常数；访问次数用强化次数代替） ----
+// ---- C：朴素方案（指数衰减，180 天时间常数；访问次数用强化次数代替） ----
 const TYPE_IMPORTANCE: Record<string, number> = { decision: 10, security_alert: 8, bugfix: 5, feature: 4, change: 3, discovery: 2 };
 function retentionScore(o: Obs, today: Date): number {
   const age = (today.getTime() - o.created_at_epoch) / DAY;
@@ -96,7 +96,7 @@ for (const o of rankByStrength(all.slice(0, poolSize(COUNT, 0)), COUNT, 0, today
 console.log(`\nB. ACT-R（ALPHA=1）：候选池 ${poolSize(COUNT, 1)} 条，最新 ${recencyHeadSize(COUNT)} 条原样保留，其余按强度`);
 for (const o of rankByStrength(all.slice(0, poolSize(COUNT, 1)), COUNT, 1, today)) console.log(`   ${label(o)}  score=${blendedScore(o, today, 1).toFixed(3)}`);
 
-console.log('\nC. 第一版设想：指数衰减保留分数，取最高的 8 条');
+console.log('\nC. 朴素方案：指数衰减保留分数，取最高的 8 条');
 for (const o of [...all].sort((a, b) => retentionScore(b, today) - retentionScore(a, today)).slice(0, COUNT)) {
   console.log(`   ${label(o)}  score=${retentionScore(o, today).toFixed(2)}`);
 }

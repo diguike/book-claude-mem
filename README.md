@@ -13,7 +13,7 @@ last_synced: ""
 > **作者**：递归客 | **社区**：[inferloop.dev](https://inferloop.dev) | **协议**：CC BY-NC-SA 4.0
 
 > **For English readers**  
-> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (revised for v13.35.0, October 2026): hooks, the worker service, storage, search, building a mini version from scratch, and the newer server runtime, multi-host adapters and cross-device sync. It is written in Chinese; browser translation works fine for reading it, and all the code is in this repository. New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
+> This book walks through the source code of [claude-mem](https://github.com/thedotmack/claude-mem) (as of v13.35.0, October 2026): hooks, the worker service, storage, search, building a mini version from scratch, and the newer server runtime, multi-host adapters and cross-device sync. It is written in Chinese; the English edition is in [`en/`](en/README.md), and all the code is in this repository. New to agent memory? Start with the interactive companion course at [cmem.ai/learn](https://cmem.ai/learn).
 
 基于 claude-mem 开源项目的深度源码解析，面向前端/全栈工程师的 Agent Memory 系统设计与实现指南。
 
@@ -100,7 +100,6 @@ npm run test:context # 查看索引输出
 ## 参考项目
 
 - 源码基线：claude-mem v13.35.0（2026-10-08 发布，Apache-2.0；v13.0.0 起由 AGPL-3.0 改为 Apache-2.0）
-- 第一版基于 v12.6.2，2026 年 10 月按 v13.35.0 全面修订，新增第 18、19 章
 - 官网：https://claude-mem.ai
 - GitHub：https://github.com/thedotmack/claude-mem
 

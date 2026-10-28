@@ -1,7 +1,7 @@
 ---
 title: "附录 A：claude-mem 源码导航图"
 feishu_url: "https://fivwvysqdz.feishu.cn/wiki/Izgzwz9gjitMULkwVQlctduTn0d"
-last_synced: "2026-10-13T11:44:02+08:00"
+last_synced: "2026-10-28T15:09:31+08:00"
 ---
 
 基于 v13.35.0，按功能模块组织的文件路径速查。表中路径均已在该版本的源码树中核对存在；右列标出主要讲解它的章节。
@@ -83,7 +83,7 @@ last_synced: "2026-10-13T11:44:02+08:00"
 | `src/services/worker/SearchManager.ts` | 检索入口 | 7、9 |
 | `src/services/worker/search/SearchOrchestrator.ts` | Chroma 优先、SQLite 补齐的路由 | 7 |
 | `src/services/sync/ChromaSync.ts` | 向量同步 | 7 |
-| `src/services/reinforcement/` | ACT-R 强化历史与排序 | 7、20 |
+| `src/services/reinforcement/` | ACT-R 强化历史与排序 | 7、10、20 |
 
 ## 上下文与 MCP
 
